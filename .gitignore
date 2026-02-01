@@ -1,0 +1,39 @@
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+
+# Pygame
+*.pyc
+*.pyo
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Virtual environment
+venv/
+env/
+
+# Build files
+build/
+dist/
+*.egg-info/
+
+# Log files
+logs/
+*.log
+
+# Local configuration files
+.env
+.local
+
+# Word list files (if they're large or auto-generated)
+# kaoyan_words.txt
