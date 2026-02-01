@@ -9,7 +9,7 @@ try:
     import win32com.client
     speaker = win32com.client.Dispatch("SAPI.SpVoice")
     # 设置语速（-10到10，默认为0）
-    speaker.Rate = 5  # 加快语速
+    speaker.Rate = 0  # 加快语速
     HAS_TTS = True
 except:
     HAS_TTS = False  # 如果没有安装win32com，禁用TTS功能
@@ -40,17 +40,17 @@ YELLOW = (255, 255, 0)
 DIFFICULTY = {
     "easy": {
         "monster_speed": 1,  # 减慢怪物速度
-        "bullet_vel": 1,  # 子弹速度与怪物速度一致
+        "bullet_vel": 0.3,  # 子弹速度与怪物速度一致
         "spawn_rate": 200
     },
     "medium": {
         "monster_speed": 1.5,
-        "bullet_vel": 1.5,  # 子弹速度与怪物速度一致
+        "bullet_vel": 0.5,  # 子弹速度与怪物速度一致
         "spawn_rate": 150
     },
     "hard": {
         "monster_speed": 2,
-        "bullet_vel": 2,  # 子弹速度与怪物速度一致
+        "bullet_vel": 0.7,  # 子弹速度与怪物速度一致
         "spawn_rate": 100
     }
 }
@@ -66,7 +66,7 @@ PLAYER_SIZE = 40
 player_x = WIDTH // 2
 player_y = HEIGHT // 2
 player_speed = 8
-ATTACK_RANGE = 600  # 攻击范围（像素）
+ATTACK_RANGE = 1800  # 攻击范围（像素）
 
 # 子弹设置
 bullets = []
@@ -157,10 +157,16 @@ monster_base_size = 30  # 怪物基础大小
 # 游戏状态
 score = 0
 game_over = False
-last_bullet_word = ""  # 上一次发射的子弹内容
 last_shot_time = 0  # 上一次发射的时间
+BULLET_COOLDOWN = 0.5  # 子弹冷却时间（秒）
 last_tts_time = 0  # 上一次TTS调用的时间
 TTS_COOLDOWN = 3  # TTS冷却时间（秒）
+tts_language_toggle = 0  # TTS语言切换：0=中文，1=英文
+clip_bullets = []  # 弹夹中的子弹内容
+PLAYER_SPEED = 5  # 玩家移动速度
+next_bullet_word = ""  # 即将发射的子弹内容
+last_bullet_word_update = 0  # 上一次更新子弹内容的时间
+BULLET_WORD_UPDATE_INTERVAL = 6  # 子弹内容更新间隔（秒）
 
 # 技能系统
 SKILL_COOLDOWN = 3  # 技能冷却时间（秒）
@@ -170,12 +176,6 @@ skills = {
         "last_used": 0,
         "active": False,
         "duration": 3  # 冰冻持续时间（秒）
-    },
-    "spin": {
-        "name": "旋转",
-        "last_used": 0,
-        "active": False,
-        "duration": 3  # 旋转持续时间（秒）
     },
     "firestorm": {
         "name": "火焰风暴",
@@ -264,8 +264,9 @@ def spawn_monster(is_sentence_monster=False, original_word_pair=None, spawn_x=No
     
     # 随机决定怪物的主语言：0=英文，1=中文
     primary_language = random.randint(0, 1)
-    # 根据单词长度计算血量（每个字母需要5次攻击）
-    max_hp = max(len(word_pair[0]), len(word_pair[1])) * 5
+    # 根据单词长度计算血量（每个字母需要2.5次攻击）
+    max_hp = max(len(word_pair[0]), len(word_pair[1])) * 2
+    max_hp = int(max_hp)  # 确保血量为整数
     
     # 如果是句子怪物，血量更高，颜色更恐怖
     if is_sentence_monster:
@@ -275,8 +276,8 @@ def spawn_monster(is_sentence_monster=False, original_word_pair=None, spawn_x=No
     else:
         monster_color = RED
     
-    # [x, y, [英文, 中文, 英文例句, 中文例句], remaining_letters, is_dead, size, show_chinese, death_time, primary_language, color, opacity, frozen, frozen_end_time, spinning, spin_angle, hp, max_hp, is_sentence_monster]
-    monsters.append([x, y, word_pair, list(word_pair[0]), False, monster_size, False, 0, primary_language, monster_color, 255, False, 0, False, 0, max_hp, max_hp, is_sentence_monster])
+    # [x, y, [英文, 中文, 英文例句, 中文例句], remaining_letters, is_dead, size, show_chinese, death_time, primary_language, color, opacity, frozen, frozen_end_time, hp, max_hp, is_sentence_monster]
+    monsters.append([x, y, word_pair, list(word_pair[0]), False, monster_size, False, 0, primary_language, monster_color, 255, False, 0, max_hp, max_hp, is_sentence_monster])
 
 # 移动怪物
 def move_monsters():
@@ -284,7 +285,7 @@ def move_monsters():
     current_time = time.time()
     for monster in monsters:
         try:
-            if len(monster) > 16 and not monster[4]:  # 如果怪物没有死亡
+            if len(monster) >= 16 and not monster[4]:  # 如果怪物没有死亡
                 # 检查冰冻状态
                 if monster[11]:  # frozen
                     if current_time > monster[12]:  # frozen_end_time
@@ -292,10 +293,6 @@ def move_monsters():
                         monster[9] = RED  # 恢复红色
                     else:
                         continue  # 冰冻状态不移动
-                
-                # 检查旋转状态
-                if monster[13]:  # spinning
-                    monster[14] = (monster[14] + 15) % 360  # 旋转角度
                 
                 # 计算怪物到玩家的方向
                 dx = player_x - monster[0]
@@ -320,7 +317,7 @@ def get_closest_monster():
     min_distance = float('inf')
     for monster in monsters:
         try:
-            if len(monster) > 16 and not monster[4]:  # 如果怪物没有死亡
+            if len(monster) >= 16 and not monster[4]:  # 如果怪物没有死亡
                 distance = ((monster[0] - player_x)**2 + (monster[1] - player_y)**2)**0.5
                 # 只考虑在攻击范围内的怪物
                 if distance <= ATTACK_RANGE and distance < min_distance:
@@ -330,19 +327,43 @@ def get_closest_monster():
             pass
     return closest_monster
 
+# 获取攻击范围内的随机怪物
+def get_random_monster_in_range():
+    if not monsters:
+        return None
+    monsters_in_range = []
+    for monster in monsters:
+        try:
+            if len(monster) >= 16 and not monster[4]:  # 如果怪物没有死亡
+                distance = ((monster[0] - player_x)**2 + (monster[1] - player_y)**2)**0.5
+                # 只考虑在攻击范围内的怪物
+                if distance <= ATTACK_RANGE:
+                    monsters_in_range.append(monster)
+        except (IndexError, AttributeError):
+            pass
+    if monsters_in_range:
+        return random.choice(monsters_in_range)
+    return None
+
 # 发射子弹
-def shoot_bullet():
-    global last_shot_time, last_bullet_word, last_tts_time
-    closest_monster = get_closest_monster()
+def shoot_bullet(target_x=None, target_y=None):
+    global last_shot_time, last_tts_time, clip_bullets
+    target_monster = get_random_monster_in_range()
     try:
-        if closest_monster and len(closest_monster) > 16 and not closest_monster[4]:
+        if target_monster and len(target_monster) >= 16 and not target_monster[4]:
+            current_time = time.time()
+            can_shoot = current_time - last_shot_time >= BULLET_COOLDOWN
+            
+            if not can_shoot:
+                return  # 冷却时间未到，不发射
+            
             # 显示怪物的次要语言
-            closest_monster[6] = True
+            target_monster[6] = True
             
             # 检查是否是句子怪物
-            if len(closest_monster) > 17 and closest_monster[17]:
+            if len(target_monster) >= 16 and target_monster[15]:
                 # 句子怪物：使用整个例句
-                word_pair = closest_monster[2]
+                word_pair = target_monster[2]
                 if len(word_pair) >= 4 and word_pair[2] and word_pair[3]:
                     # 使用英文例句作为子弹
                     bullet_word = word_pair[2]
@@ -350,29 +371,47 @@ def shoot_bullet():
                     bullet_word = word_pair[0]
             else:
                 # 普通怪物：根据主语言决定子弹使用的语言
-                if closest_monster[8] == 0:  # 英文怪物，子弹用中文
-                    bullet_word = closest_monster[2][1]
+                if target_monster[8] == 0:  # 英文怪物，子弹用中文
+                    bullet_word = target_monster[2][1]
                 else:  # 中文怪物，子弹用英文
-                    bullet_word = closest_monster[2][0]
+                    bullet_word = target_monster[2][0]
             
-            # 计算子弹方向（从玩家位置到怪物位置）
-            dx = closest_monster[0] - player_x
-            dy = closest_monster[1] - player_y
+            # 添加到弹夹
+            clip_bullets.append(bullet_word)
+            if len(clip_bullets) > 10:  # 弹夹最多显示10发
+                clip_bullets.pop(0)
+            
+            # 计算子弹方向（从玩家位置到目标位置）
+            if target_x is not None and target_y is not None:
+                dx = target_x - player_x
+                dy = target_y - player_y
+            else:
+                dx = target_monster[0] - player_x
+                dy = target_monster[1] - player_y
             distance = (dx**2 + dy**2)**0.5
             if distance > 0:
                 bullet_vel = DIFFICULTY[current_difficulty]["bullet_vel"]
-                # 检查是否连续发射相同的子弹
-                current_time = time.time()
-                is_rapid_fire = current_time - last_shot_time < 0.3  # 0.3秒内视为快速连续发射
-                
-                # 检查TTS冷却时间
                 can_use_tts = current_time - last_tts_time >= TTS_COOLDOWN
                 
-                # 如果是快速连续发射且子弹内容相同，使用文本转语音
-                if is_rapid_fire and bullet_word == last_bullet_word and HAS_TTS and can_use_tts:
+                # 如果TTS冷却时间到了，使用文本转语音
+                if HAS_TTS and can_use_tts:
                     try:
-                        # 使用异步模式播放语音，避免卡顿
-                        speaker.Speak(bullet_word, 1)  # 1 表示异步执行
+                        # 检查是否是句子怪物
+                        if len(target_monster) >= 16 and target_monster[15]:
+                            # 句子怪物：播放英文例句
+                            word_pair = target_monster[2]
+                            if len(word_pair) >= 4 and word_pair[2]:
+                                word_to_speak = word_pair[2]
+                            else:
+                                word_to_speak = word_pair[0]
+                        else:
+                            # 普通怪物：播放英文和中文
+                            word_pair = target_monster[2]
+                            word_to_speak = f"{word_pair[0]}, {word_pair[1]}"
+                        
+                        # 使用异步模式播放语音，并清除之前的语音
+                        speaker.Speak(word_to_speak, 1 | 2)  # 1=异步执行, 2=清除之前的语音
+                        
                         last_tts_time = current_time  # 更新TTS调用时间
                     except:
                         pass  # 如果TTS失败，忽略错误
@@ -385,11 +424,10 @@ def shoot_bullet():
                     except:
                         pass  # 如果没有音效文件，忽略错误
                 
-                # 更新最后发射的子弹内容和时间
-                last_bullet_word = bullet_word
+                # 更新最后发射的时间
                 last_shot_time = current_time
                 
-                bullets.append([player_x, player_y, (dx/distance)*bullet_vel, (dy/distance)*bullet_vel, None, closest_monster, False, bullet_word])  # [x, y, dx, dy, letter, target_monster, is_dead, bullet_word]
+                bullets.append([player_x, player_y, (dx/distance)*bullet_vel, (dy/distance)*bullet_vel, None, target_monster, False, bullet_word])  # [x, y, dx, dy, letter, target_monster, is_dead, bullet_word]
     except (IndexError, AttributeError, ZeroDivisionError):
         pass
 
@@ -407,7 +445,7 @@ def move_bullets():
             # 检查子弹是否击中目标怪物
             target_monster = bullet[5]
             try:
-                if target_monster and len(target_monster) > 16 and not target_monster[4]:  # 如果目标怪物存在且未死亡
+                if target_monster and len(target_monster) >= 16 and not target_monster[4]:  # 如果目标怪物存在且未死亡
                     # 计算长方形怪物的碰撞区域
                     rect_width = target_monster[5] * 2
                     rect_height = target_monster[5]
@@ -422,9 +460,18 @@ def move_bullets():
                         bullet[6] = True
                         
                         # 减少怪物血量
-                        target_monster[15] -= 1  # hp
-                        current_hp = target_monster[15]
-                        max_hp = target_monster[16]
+                        target_monster[13] -= 1  # hp
+                        current_hp = target_monster[13]
+                        max_hp = target_monster[14]
+                        
+                        # 让怪物后退（沿着子弹方向的相反方向）
+                        knockback_distance = -40  # 后退距离
+                        target_monster[0] -= bullet[2] * knockback_distance  # x方向后退
+                        target_monster[1] -= bullet[3] * knockback_distance  # y方向后退
+                        
+                        # 确保怪物不会退到屏幕外
+                        target_monster[0] = max(50, min(WIDTH - 50, target_monster[0]))
+                        target_monster[1] = max(50, min(HEIGHT - 50, target_monster[1]))
                         
                         # 根据血量比例改变怪物颜色
                         if max_hp > 0:
@@ -463,7 +510,7 @@ def move_bullets():
                             score += 1
                             
                             # 检查是否是句子怪物
-                            if not target_monster[17]:  # 不是句子怪物
+                            if not target_monster[15]:  # 不是句子怪物
                                 # 检查是否有例句
                                 word_pair = target_monster[2]
                                 if len(word_pair) >= 4 and word_pair[2] and word_pair[3]:  # 有例句
@@ -501,13 +548,10 @@ def trigger_random_skill():
     for skill_key in skill_keys:
         skill = skills[skill_key]
         if current_time - skill["last_used"] >= SKILL_COOLDOWN:
-            if skill_key == "freeze":
-                activate_freeze_skill()
-                return True
-            elif skill_key == "spin":
-                activate_spin_skill()
-                return True
-            elif skill_key == "firestorm":
+            # if skill_key == "freeze":
+            #     activate_freeze_skill()
+            #     return True
+            if skill_key == "firestorm":
                 activate_firestorm_skill()
                 return True
             elif skill_key == "lightning":
@@ -538,34 +582,13 @@ def activate_freeze_skill():
         end_time = current_time + skills["freeze"]["duration"]
         for monster in monsters:
             try:
-                if len(monster) > 16 and not monster[4]:  # 只对活着的怪物生效
+                if len(monster) >= 16 and not monster[4]:  # 只对活着的怪物生效
                     # 检查是否在攻击范围内
                     distance = ((monster[0] - player_x)**2 + (monster[1] - player_y)**2)**0.5
                     if distance <= ATTACK_RANGE:
                         monster[11] = True  # frozen
                         monster[12] = end_time  # frozen_end_time
                         monster[9] = (0, 191, 255)  # 变为冰蓝色
-            except (IndexError, AttributeError):
-                pass
-        return True
-    return False
-
-# 激活旋转技能
-def activate_spin_skill():
-    current_time = time.time()
-    if current_time - skills["spin"]["last_used"] >= SKILL_COOLDOWN:
-        skills["spin"]["last_used"] = current_time
-        skills["spin"]["active"] = True
-        # 只对攻击范围内的怪物应用旋转效果
-        end_time = current_time + skills["spin"]["duration"]
-        for monster in monsters:
-            try:
-                if len(monster) > 16 and not monster[4]:  # 只对活着的怪物生效
-                    # 检查是否在攻击范围内
-                    distance = ((monster[0] - player_x)**2 + (monster[1] - player_y)**2)**0.5
-                    if distance <= ATTACK_RANGE:
-                        monster[13] = True  # spinning
-                        monster[14] = 0  # spin_angle
             except (IndexError, AttributeError):
                 pass
         return True
@@ -599,12 +622,12 @@ def activate_firestorm_skill():
         # 只对攻击范围内的怪物造成伤害
         for monster in monsters:
             try:
-                if len(monster) > 16 and not monster[4]:
+                if len(monster) >= 16 and not monster[4]:
                     # 检查是否在攻击范围内
                     distance = ((monster[0] - player_x)**2 + (monster[1] - player_y)**2)**0.5
                     if distance <= ATTACK_RANGE:
-                        monster[15] = max(0, monster[15] - 5)  # 减少5点血量
-                        if monster[15] <= 0:
+                        monster[13] = max(0, monster[13] - 5)  # 减少5点血量
+                        if monster[13] <= 0:
                             monster[4] = True
                             monster[7] = current_time
                             global score
@@ -627,7 +650,7 @@ def activate_lightning_skill():
         alive_monsters = []
         for m in monsters:
             try:
-                if len(m) > 16 and not m[4]:
+                if len(m) >= 16 and not m[4]:
                     # 检查是否在攻击范围内
                     distance = ((m[0] - player_x)**2 + (m[1] - player_y)**2)**0.5
                     if distance <= ATTACK_RANGE:
@@ -644,9 +667,9 @@ def activate_lightning_skill():
             # 对目标造成大量伤害
             for monster in lightning_targets:
                 try:
-                    if len(monster) > 16:
-                        monster[15] = max(0, monster[15] - 8)  # 减少8点血量
-                        if monster[15] <= 0:
+                    if len(monster) >= 16:
+                        monster[13] = max(0, monster[13] - 8)  # 减少8点血量
+                        if monster[13] <= 0:
                             monster[4] = True
                             monster[7] = current_time
                             global score
@@ -679,27 +702,13 @@ def check_skills():
         any_frozen = False
         for monster in monsters:
             try:
-                if len(monster) > 16 and not monster[4] and monster[11]:
+                if len(monster) >= 16 and not monster[4] and monster[11]:
                     any_frozen = True
                     break
             except (IndexError, AttributeError):
                 pass
         if not any_frozen:
             skills["freeze"]["active"] = False
-    
-    # 检查旋转技能
-    if skills["spin"]["active"]:
-        # 检查是否有怪物还在旋转状态
-        any_spinning = False
-        for monster in monsters:
-            try:
-                if len(monster) > 16 and not monster[4] and monster[13]:
-                    any_spinning = True
-                    break
-            except (IndexError, AttributeError):
-                pass
-        if not any_spinning:
-            skills["spin"]["active"] = False
     
     # 检查火焰风暴技能
     if skills["firestorm"]["active"]:
@@ -745,45 +754,45 @@ def draw_game():
         pygame.draw.circle(WIN, (255, 255, 255), (x, y - cloud_size // 3), cloud_size // 2)
     
     # 绘制火焰粒子
-    if skills["firestorm"]["active"]:
-        for particle in firestorm_particles:
-            try:
-                x, y, dx, dy, size, r, g, b, a = particle
-                # 创建带透明度的表面
-                particle_surf = pygame.Surface((size * 2, size * 2), pygame.SRCALPHA)
-                pygame.draw.circle(particle_surf, (r, g, b, a), (size, size), size)
-                WIN.blit(particle_surf, (int(x) - size, int(y) - size))
-                
-                # 更新粒子位置
-                particle[0] += dx
-                particle[1] += dy
-                particle[7] = max(0, particle[7] - 5)  # 减少透明度
-                particle[4] = max(5, particle[4] - 0.5)  # 减小尺寸
-            except (IndexError, AttributeError):
-                pass
+    # if skills["firestorm"]["active"]:
+    #     for particle in firestorm_particles:
+    #         try:
+    #             x, y, dx, dy, size, r, g, b, a = particle
+    #             # 创建带透明度的表面
+    #             particle_surf = pygame.Surface((size * 2, size * 2), pygame.SRCALPHA)
+    #             pygame.draw.circle(particle_surf, (r, g, b, a), (size, size), size)
+    #             WIN.blit(particle_surf, (int(x) - size, int(y) - size))
+    #             
+    #             # 更新粒子位置
+    #             particle[0] += dx
+    #             particle[1] += dy
+    #             particle[7] = max(0, particle[7] - 5)  # 减少透明度
+    #             particle[4] = max(5, particle[4] - 0.5)  # 减小尺寸
+    #         except (IndexError, AttributeError):
+    #             pass
     
     # 绘制闪电效果
-    if skills["lightning"]["active"] and lightning_targets:
-        for monster in lightning_targets:
-            try:
-                if monster and len(monster) > 16 and not monster[4]:
-                    # 从玩家到怪物绘制闪电
-                    start_pos = (int(player_x), int(player_y))
-                    end_pos = (int(monster[0]), int(monster[1]))
-                    
-                    # 绘制多条闪电线
-                    for j in range(3):
-                        offset_x = random.randint(-10, 10)
-                        offset_y = random.randint(-10, 10)
-                        mid_pos = ((start_pos[0] + end_pos[0]) // 2 + offset_x, 
-                                  (start_pos[1] + end_pos[1]) // 2 + offset_y)
-                        pygame.draw.line(WIN, (255, 255, 0), start_pos, mid_pos, 3)
-                        pygame.draw.line(WIN, (255, 255, 0), mid_pos, end_pos, 3)
-                    
-                    # 绘制发光效果
-                    pygame.draw.circle(WIN, (255, 255, 200), end_pos, 20, 2)
-            except (IndexError, AttributeError):
-                pass  # 忽略已死亡的怪物
+    # if skills["lightning"]["active"] and lightning_targets:
+    #     for monster in lightning_targets:
+    #         try:
+    #             if monster and len(monster) >= 16 and not monster[4]:
+    #                 # 从玩家到怪物绘制闪电
+    #                 start_pos = (int(player_x), int(player_y))
+    #                 end_pos = (int(monster[0]), int(monster[1]))
+    #                 
+    #                 # 绘制多条闪电线
+    #                 for j in range(3):
+    #                     offset_x = random.randint(-10, 10)
+    #                     offset_y = random.randint(-10, 10)
+    #                     mid_pos = ((start_pos[0] + end_pos[0]) // 2 + offset_x, 
+    #                               (start_pos[1] + end_pos[1]) // 2 + offset_y)
+    #                     pygame.draw.line(WIN, (255, 255, 0), start_pos, mid_pos, 3)
+    #                     pygame.draw.line(WIN, (255, 255, 0), mid_pos, end_pos, 3)
+    #                 
+    #                 # 绘制发光效果
+    #                 pygame.draw.circle(WIN, (255, 255, 200), end_pos, 20, 2)
+    #         except (IndexError, AttributeError):
+    #             pass  # 忽略已死亡的怪物
     
     # 绘制玩家
     # 玩家身体（圆形）
@@ -827,6 +836,12 @@ def draw_game():
     
     # 绘制攻击范围圈
     pygame.draw.circle(WIN, (0, 200, 255), (int(player_x), int(player_y)), ATTACK_RANGE, 2)
+    
+    # 绘制即将发射的子弹内容
+    if next_bullet_word:
+        next_bullet_text = FONT.render(next_bullet_word, True, BLACK)
+        next_bullet_rect = next_bullet_text.get_rect(center=(int(player_x), int(player_y) - PLAYER_SIZE - 20))
+        WIN.blit(next_bullet_text, next_bullet_rect)
     
     # 绘制怪物
     for monster in monsters:
@@ -886,18 +901,14 @@ def draw_game():
                 pygame.draw.line(monster_surf, color, (center_x + rect_width//4, center_y + rect_height//2), 
                                (center_x + rect_width//4 + limb_size, center_y + rect_height//2 + limb_size), limb_size)
                 
-                # 如果怪物在旋转状态，旋转表面
-                if monster[13]:  # spinning
-                    monster_surf = pygame.transform.rotate(monster_surf, monster[14])
-                
                 # 绘制到窗口
                 rect = monster_surf.get_rect(center=(int(monster[0]), int(monster[1])))
                 WIN.blit(monster_surf, rect)
                 
                 # 绘制血条
-                if len(monster) > 16:
-                    current_hp = monster[15]
-                    max_hp = monster[16]
+                if len(monster) >= 16:
+                    current_hp = monster[13]
+                    max_hp = monster[14]
                     hp_bar_width = rect_width
                     hp_bar_height = 6
                     hp_bar_x = int(monster[0]) - hp_bar_width // 2
@@ -929,7 +940,7 @@ def draw_game():
                 
                 # 根据主语言绘制对应单词
                 # 检查是否是句子怪物
-                if len(monster) > 17 and monster[17]:  # 句子怪物
+                if len(monster) >= 16 and monster[15]:  # 句子怪物
                     # 显示例句
                     word_pair = monster[2]
                     if len(word_pair) >= 4 and word_pair[2] and word_pair[3]:
@@ -1028,13 +1039,13 @@ def draw_game():
         WIN.blit(restart_text, restart_rect)
     
     # 绘制游戏说明
-    instruction_text1 = SMALL_FONT.render("左键移动玩家，右键发射最近怪物的第一个字母", True, BLACK)
+    instruction_text1 = SMALL_FONT.render("WASD移动玩家，左键向点击位置发射子弹", True, BLACK)
     WIN.blit(instruction_text1, (WIDTH - 450, 20))
     instruction_text2 = SMALL_FONT.render("击中后减少怪物血量，血量为0时怪物消灭", True, BLACK)
     WIN.blit(instruction_text2, (WIDTH - 450, 40))
     instruction_text3 = SMALL_FONT.render("子弹击中怪物时随机触发技能", True, BLACK)
     WIN.blit(instruction_text3, (WIDTH - 450, 60))
-    instruction_text4 = SMALL_FONT.render("技能: 冰冻/旋转/火焰风暴/闪电链/时间减速", True, BLACK)
+    instruction_text4 = SMALL_FONT.render("技能: 冰冻/火焰风暴/闪电链/时间减速", True, BLACK)
     WIN.blit(instruction_text4, (WIDTH - 450, 80))
     instruction_text5 = SMALL_FONT.render("按F11或f键切换全屏", True, BLACK)
     WIN.blit(instruction_text5, (WIDTH - 450, 100))
@@ -1063,6 +1074,35 @@ def draw_game():
         skill_text = SMALL_FONT.render(status_text, True, color)
         WIN.blit(skill_text, (20, skill_y))
         skill_y += 25  # 减小间距以容纳更多技能
+    
+    # 绘制弹夹（在右侧）
+    clip_x = WIDTH - 200
+    clip_y = HEIGHT - 300
+    clip_width = 180
+    clip_height = 280
+    
+    # 绘制弹夹背景
+    pygame.draw.rect(WIN, (200, 200, 200), (clip_x, clip_y, clip_width, clip_height))
+    pygame.draw.rect(WIN, BLACK, (clip_x, clip_y, clip_width, clip_height), 2)
+    
+    # 绘制弹夹标题
+    clip_title = FONT.render("弹夹", True, BLACK)
+    clip_title_rect = clip_title.get_rect(center=(clip_x + clip_width // 2, clip_y + 25))
+    WIN.blit(clip_title, clip_title_rect)
+    
+    # 绘制弹夹中的子弹
+    bullet_start_y = clip_y + 50
+    for i, bullet_content in enumerate(clip_bullets):
+        bullet_y = bullet_start_y + i * 25
+        if bullet_y < clip_y + clip_height - 20:
+            # 绘制子弹背景
+            pygame.draw.rect(WIN, (255, 255, 255), (clip_x + 10, bullet_y, clip_width - 20, 20))
+            pygame.draw.rect(WIN, BLACK, (clip_x + 10, bullet_y, clip_width - 20, 20), 1)
+            
+            # 绘制子弹内容
+            bullet_text = SMALL_FONT.render(bullet_content, True, BLACK)
+            bullet_rect = bullet_text.get_rect(center=(clip_x + clip_width // 2, bullet_y + 10))
+            WIN.blit(bullet_text, bullet_rect)
     
     pygame.display.update()
 
@@ -1160,13 +1200,44 @@ def main():
             # 鼠标事件
             if event.type == pygame.MOUSEBUTTONDOWN:
                 if not game_over:
-                    if event.button == 1:  # 左键点击移动玩家
-                        player_x, player_y = pygame.mouse.get_pos()
-                        # 限制玩家在屏幕内
-                        player_x = max(PLAYER_SIZE//2, min(WIDTH - PLAYER_SIZE//2, player_x))
-                        player_y = max(PLAYER_SIZE//2, min(HEIGHT - PLAYER_SIZE//2, player_y))
-                    elif event.button == 3:  # 右键点击发射子弹
-                        shoot_bullet()
+                    if event.button == 1:  # 左键点击发射子弹
+                        mouse_x, mouse_y = pygame.mouse.get_pos()
+                        shoot_bullet(mouse_x, mouse_y)
+        
+        # WASD移动玩家
+        if not game_over:
+            keys = pygame.key.get_pressed()
+            if keys[pygame.K_w] or keys[pygame.K_a] or keys[pygame.K_s] or keys[pygame.K_d]:
+                if keys[pygame.K_w]:
+                    player_y = max(PLAYER_SIZE//2, player_y - PLAYER_SPEED)
+                if keys[pygame.K_s]:
+                    player_y = min(HEIGHT - PLAYER_SIZE//2, player_y + PLAYER_SPEED)
+                if keys[pygame.K_a]:
+                    player_x = max(PLAYER_SIZE//2, player_x - PLAYER_SPEED)
+                if keys[pygame.K_d]:
+                    player_x = min(WIDTH - PLAYER_SIZE//2, player_x + PLAYER_SPEED)
+        
+        # 更新即将发射的子弹内容（最多每2秒更新一次）
+        if not game_over:
+            global next_bullet_word, last_bullet_word_update
+            current_time = time.time()
+            if current_time - last_bullet_word_update >= BULLET_WORD_UPDATE_INTERVAL:
+                target_monster = get_random_monster_in_range()
+                if target_monster and len(target_monster) >= 16 and not target_monster[4]:
+                    if len(target_monster) >= 16 and target_monster[15]:
+                        word_pair = target_monster[2]
+                        if len(word_pair) >= 4 and word_pair[2] and word_pair[3]:
+                            next_bullet_word = word_pair[2]
+                        else:
+                            next_bullet_word = word_pair[0]
+                    else:
+                        if target_monster[8] == 0:
+                            next_bullet_word = target_monster[2][1]
+                        else:
+                            next_bullet_word = target_monster[2][0]
+                else:
+                    next_bullet_word = ""
+                last_bullet_word_update = current_time
         
         # 移动怪物
         move_monsters()
