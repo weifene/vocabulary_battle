@@ -2,6 +2,7 @@ import pygame
 import random
 import sys
 import time
+import math
 
 # 尝试导入文本转语音模块
 try:
@@ -54,6 +55,7 @@ DIFFICULTY = {
     }
 }
 current_difficulty = "easy"  # 默认难度
+is_fullscreen = False  # 全屏状态
 
 # 字体设置
 FONT = pygame.font.SysFont('SimHei', 30)
@@ -64,6 +66,7 @@ PLAYER_SIZE = 40
 player_x = WIDTH // 2
 player_y = HEIGHT // 2
 player_speed = 8
+ATTACK_RANGE = 600  # 攻击范围（像素）
 
 # 子弹设置
 bullets = []
@@ -81,27 +84,59 @@ def load_kaoyan_words():
             for line in lines:
                 line = line.strip()
                 if line:
-                    # 提取英文单词（第一个空格前的内容）
-                    parts = line.split(' ')
-                    if parts:
+                    # 尝试用制表符分割（新格式：单词\t释义\t英文例句\t中文例句）
+                    parts = line.split('\t')
+                    if len(parts) >= 2:
                         english_word = parts[0]
-                        # 提取中文释义（包含n. v. adj.等词性后的内容）
-                        chinese_part = ' '.join(parts[1:])
-                        # 过滤掉词性标记和乱码，只保留中文
-                        chinese_word = ''
-                        for char in chinese_part:
-                            if '\u4e00' <= char <= '\u9fff':
-                                chinese_word += char
-                        if english_word and chinese_word:
-                            WORD_LIST.append([english_word, chinese_word])
-        # 如果解析失败，使用默认单词列表
-        if not WORD_LIST:
-            WORD_LIST = [["apple", "苹果"], ["banana", "香蕉"], ["cherry", "樱桃"], ["orange", "橙子"], ["grape", "葡萄"], 
-                         ["watermelon", "西瓜"], ["strawberry", "草莓"], ["pineapple", "菠萝"], ["mango", "芒果"], ["peach", "桃子"],
-                         ["computer", "电脑"], ["keyboard", "键盘"], ["mouse", "鼠标"], ["monitor", "显示器"], ["printer", "打印机"], 
-                         ["speaker", "音箱"], ["headphone", "耳机"], ["laptop", "笔记本"], ["tablet", "平板"], ["phone", "手机"],
-                         ["python", "蟒蛇"], ["java", "咖啡"], ["c++", "C加加"], ["javascript", "脚本"], ["html", "超文本"], 
-                         ["css", "样式表"], ["ruby", "红宝石"], ["php", "超文本"], ["swift", "迅捷"], ["kotlin", "科特林"]]
+                        meaning = parts[1]
+                        # 如果有例句，添加到列表
+                        if len(parts) >= 4:
+                            en_sentence = parts[2]
+                            cn_sentence = parts[3]
+                            WORD_LIST.append([english_word, meaning, en_sentence, cn_sentence])
+                        else:
+                            # 旧格式，只提取中文释义
+                            chinese_word = ''
+                            for char in meaning:
+                                if '\u4e00' <= char <= '\u9fff':
+                                    chinese_word += char
+                            if chinese_word:
+                                WORD_LIST.append([english_word, chinese_word, "", ""])
+        # 尝试读取github_words.txt（新格式）
+        try:
+            with open('d:\\qlib\\word_monster_game\\github_words.txt', 'r', encoding='utf-8') as f:
+                lines = f.readlines()
+                for line in lines:
+                    line = line.strip()
+                    if line:
+                        # 新格式：单词\t释义\t英文例句\t中文例句
+                        parts = line.split('\t')
+                        if len(parts) >= 4:
+                            english_word = parts[0]
+                            meaning = parts[1]
+                            en_sentence = parts[2]
+                            cn_sentence = parts[3]
+                            WORD_LIST.append([english_word, meaning, en_sentence, cn_sentence])
+        except FileNotFoundError:
+            pass
+        # 尝试读取github_words.txt（新格式）
+        try:
+            with open('d:\\qlib\\word_monster_game\\github_words.txt', 'r', encoding='utf-8') as f:
+                lines = f.readlines()
+                for line in lines:
+                    line = line.strip()
+                    if line:
+                        # 新格式：单词\t释义\t英文例句\t中文例句
+                        parts = line.split('\t')
+                        if len(parts) >= 4:
+                            english_word = parts[0]
+                            meaning = parts[1]
+                            en_sentence = parts[2]
+                            cn_sentence = parts[3]
+                            WORD_LIST.append([english_word, meaning, en_sentence, cn_sentence])
+        except FileNotFoundError:
+            pass
+
     except Exception as e:
         print(f"读取单词文件失败: {e}")
         # 使用默认单词列表
@@ -199,30 +234,49 @@ clock = pygame.time.Clock()
 FPS = 60
 
 # 生成怪物
-def spawn_monster():
-    word_pair = random.choice(WORD_LIST)
+def spawn_monster(is_sentence_monster=False, original_word_pair=None, spawn_x=None, spawn_y=None):
+    if is_sentence_monster and original_word_pair:
+        word_pair = original_word_pair
+    else:
+        word_pair = random.choice(WORD_LIST)
+    
     # 根据单词长度计算怪物大小
     monster_size = monster_base_size + max(len(word_pair[0]), len(word_pair[1])) * 2
-    # 随机生成怪物位置（屏幕边缘）
-    side = random.choice(["top", "bottom", "left", "right"])
-    if side == "top":
-        x = random.randint(0, WIDTH)
-        y = -monster_size * 2
-    elif side == "bottom":
-        x = random.randint(0, WIDTH)
-        y = HEIGHT + monster_size * 2
-    elif side == "left":
-        x = -monster_size * 2
-        y = random.randint(0, HEIGHT)
-    else:  # right
-        x = WIDTH + monster_size * 2
-        y = random.randint(0, HEIGHT)
+    
+    # 如果指定了生成位置，使用指定位置；否则随机生成（屏幕边缘）
+    if spawn_x is not None and spawn_y is not None:
+        x, y = spawn_x, spawn_y
+    else:
+        # 随机生成怪物位置（屏幕边缘）
+        side = random.choice(["top", "bottom", "left", "right"])
+        if side == "top":
+            x = random.randint(0, WIDTH)
+            y = -monster_size * 2
+        elif side == "bottom":
+            x = random.randint(0, WIDTH)
+            y = HEIGHT + monster_size * 2
+        elif side == "left":
+            x = -monster_size * 2
+            y = random.randint(0, HEIGHT)
+        else:  # right
+            x = WIDTH + monster_size * 2
+            y = random.randint(0, HEIGHT)
+    
     # 随机决定怪物的主语言：0=英文，1=中文
     primary_language = random.randint(0, 1)
     # 根据单词长度计算血量（每个字母需要5次攻击）
     max_hp = max(len(word_pair[0]), len(word_pair[1])) * 5
-    # [x, y, [英文, 中文], remaining_letters, is_dead, size, show_chinese, death_time, primary_language, color, opacity, frozen, frozen_end_time, spinning, spin_angle, hp, max_hp]
-    monsters.append([x, y, word_pair, list(word_pair[0]), False, monster_size, False, 0, primary_language, RED, 255, False, 0, False, 0, max_hp, max_hp])
+    
+    # 如果是句子怪物，血量更高，颜色更恐怖
+    if is_sentence_monster:
+        max_hp = max_hp * 2  # 句子怪物血量翻倍
+        monster_color = (128, 0, 128)  # 紫色，更恐怖
+        monster_size = int(monster_size * 1.5)  # 句子怪物更大
+    else:
+        monster_color = RED
+    
+    # [x, y, [英文, 中文, 英文例句, 中文例句], remaining_letters, is_dead, size, show_chinese, death_time, primary_language, color, opacity, frozen, frozen_end_time, spinning, spin_angle, hp, max_hp, is_sentence_monster]
+    monsters.append([x, y, word_pair, list(word_pair[0]), False, monster_size, False, 0, primary_language, monster_color, 255, False, 0, False, 0, max_hp, max_hp, is_sentence_monster])
 
 # 移动怪物
 def move_monsters():
@@ -268,7 +322,8 @@ def get_closest_monster():
         try:
             if len(monster) > 16 and not monster[4]:  # 如果怪物没有死亡
                 distance = ((monster[0] - player_x)**2 + (monster[1] - player_y)**2)**0.5
-                if distance < min_distance:
+                # 只考虑在攻击范围内的怪物
+                if distance <= ATTACK_RANGE and distance < min_distance:
                     min_distance = distance
                     closest_monster = monster
         except (IndexError, AttributeError):
@@ -283,11 +338,23 @@ def shoot_bullet():
         if closest_monster and len(closest_monster) > 16 and not closest_monster[4]:
             # 显示怪物的次要语言
             closest_monster[6] = True
-            # 根据怪物的主语言决定子弹使用的语言
-            if closest_monster[8] == 0:  # 英文怪物，子弹用中文
-                bullet_word = closest_monster[2][1]
-            else:  # 中文怪物，子弹用英文
-                bullet_word = closest_monster[2][0]
+            
+            # 检查是否是句子怪物
+            if len(closest_monster) > 17 and closest_monster[17]:
+                # 句子怪物：使用整个例句
+                word_pair = closest_monster[2]
+                if len(word_pair) >= 4 and word_pair[2] and word_pair[3]:
+                    # 使用英文例句作为子弹
+                    bullet_word = word_pair[2]
+                else:
+                    bullet_word = word_pair[0]
+            else:
+                # 普通怪物：根据主语言决定子弹使用的语言
+                if closest_monster[8] == 0:  # 英文怪物，子弹用中文
+                    bullet_word = closest_monster[2][1]
+                else:  # 中文怪物，子弹用英文
+                    bullet_word = closest_monster[2][0]
+            
             # 计算子弹方向（从玩家位置到怪物位置）
             dx = closest_monster[0] - player_x
             dy = closest_monster[1] - player_y
@@ -387,9 +454,22 @@ def move_bullets():
                         
                         # 检查怪物血量是否为0（死亡条件）
                         if current_hp <= 0:
+                            # 记录怪物死亡位置
+                            death_x = target_monster[0]
+                            death_y = target_monster[1]
+                            
                             target_monster[4] = True  # 标记怪物为死亡
                             target_monster[7] = time.time()  # 记录死亡时间
                             score += 1
+                            
+                            # 检查是否是句子怪物
+                            if not target_monster[17]:  # 不是句子怪物
+                                # 检查是否有例句
+                                word_pair = target_monster[2]
+                                if len(word_pair) >= 4 and word_pair[2] and word_pair[3]:  # 有例句
+                                    # 在原地生成句子怪物
+                                    spawn_monster(is_sentence_monster=True, original_word_pair=word_pair, spawn_x=death_x, spawn_y=death_y)
+                            
                             # 播放怪物消除音效
                             try:
                                 sound = pygame.mixer.Sound('D:\\qlib\\word_monster_game\\气球爆炸_爱给网_aigei_com.mp3')
@@ -454,14 +534,17 @@ def activate_freeze_skill():
     if current_time - skills["freeze"]["last_used"] >= SKILL_COOLDOWN:
         skills["freeze"]["last_used"] = current_time
         skills["freeze"]["active"] = True
-        # 对所有怪物应用冰冻效果
+        # 只对攻击范围内的怪物应用冰冻效果
         end_time = current_time + skills["freeze"]["duration"]
         for monster in monsters:
             try:
                 if len(monster) > 16 and not monster[4]:  # 只对活着的怪物生效
-                    monster[11] = True  # frozen
-                    monster[12] = end_time  # frozen_end_time
-                    monster[9] = (0, 191, 255)  # 变为冰蓝色
+                    # 检查是否在攻击范围内
+                    distance = ((monster[0] - player_x)**2 + (monster[1] - player_y)**2)**0.5
+                    if distance <= ATTACK_RANGE:
+                        monster[11] = True  # frozen
+                        monster[12] = end_time  # frozen_end_time
+                        monster[9] = (0, 191, 255)  # 变为冰蓝色
             except (IndexError, AttributeError):
                 pass
         return True
@@ -473,13 +556,16 @@ def activate_spin_skill():
     if current_time - skills["spin"]["last_used"] >= SKILL_COOLDOWN:
         skills["spin"]["last_used"] = current_time
         skills["spin"]["active"] = True
-        # 对所有怪物应用旋转效果
+        # 只对攻击范围内的怪物应用旋转效果
         end_time = current_time + skills["spin"]["duration"]
         for monster in monsters:
             try:
                 if len(monster) > 16 and not monster[4]:  # 只对活着的怪物生效
-                    monster[13] = True  # spinning
-                    monster[14] = 0  # spin_angle
+                    # 检查是否在攻击范围内
+                    distance = ((monster[0] - player_x)**2 + (monster[1] - player_y)**2)**0.5
+                    if distance <= ATTACK_RANGE:
+                        monster[13] = True  # spinning
+                        monster[14] = 0  # spin_angle
             except (IndexError, AttributeError):
                 pass
         return True
@@ -493,12 +579,14 @@ def activate_firestorm_skill():
         skills["firestorm"]["last_used"] = current_time
         skills["firestorm"]["active"] = True
         
-        # 生成火焰粒子
+        # 在攻击范围内生成火焰粒子
         firestorm_particles = []
         for _ in range(50):
+            angle = random.uniform(0, 2 * math.pi)
+            radius = random.uniform(0, ATTACK_RANGE)
             firestorm_particles.append([
-                random.randint(0, WIDTH),
-                random.randint(0, HEIGHT),
+                player_x + radius * math.cos(angle),
+                player_y + radius * math.sin(angle),
                 random.randint(-3, 3),  # dx
                 random.randint(-3, 3),  # dy
                 random.randint(20, 40),  # size
@@ -508,16 +596,19 @@ def activate_firestorm_skill():
                 random.randint(150, 255)  # alpha
             ])
         
-        # 对所有怪物造成伤害
+        # 只对攻击范围内的怪物造成伤害
         for monster in monsters:
             try:
                 if len(monster) > 16 and not monster[4]:
-                    monster[15] = max(0, monster[15] - 5)  # 减少5点血量
-                    if monster[15] <= 0:
-                        monster[4] = True
-                        monster[7] = current_time
-                        global score
-                        score += 1
+                    # 检查是否在攻击范围内
+                    distance = ((monster[0] - player_x)**2 + (monster[1] - player_y)**2)**0.5
+                    if distance <= ATTACK_RANGE:
+                        monster[15] = max(0, monster[15] - 5)  # 减少5点血量
+                        if monster[15] <= 0:
+                            monster[4] = True
+                            monster[7] = current_time
+                            global score
+                            score += 1
             except (IndexError, AttributeError):
                 pass
         
@@ -532,12 +623,15 @@ def activate_lightning_skill():
         skills["lightning"]["last_used"] = current_time
         skills["lightning"]["active"] = True
         
-        # 选择最近的3个怪物作为闪电目标
+        # 选择攻击范围内最近的3个怪物作为闪电目标
         alive_monsters = []
         for m in monsters:
             try:
                 if len(m) > 16 and not m[4]:
-                    alive_monsters.append(m)
+                    # 检查是否在攻击范围内
+                    distance = ((m[0] - player_x)**2 + (m[1] - player_y)**2)**0.5
+                    if distance <= ATTACK_RANGE:
+                        alive_monsters.append(m)
             except (IndexError, AttributeError):
                 pass
         
@@ -731,6 +825,9 @@ def draw_game():
     pygame.draw.line(WIN, BLUE, (int(player_x) + PLAYER_SIZE//4, int(player_y) + PLAYER_SIZE//2), 
                    (int(player_x) + PLAYER_SIZE//4 + limb_size, int(player_y) + PLAYER_SIZE//2 + limb_size*2), limb_size)
     
+    # 绘制攻击范围圈
+    pygame.draw.circle(WIN, (0, 200, 255), (int(player_x), int(player_y)), ATTACK_RANGE, 2)
+    
     # 绘制怪物
     for monster in monsters:
         try:
@@ -831,7 +928,23 @@ def draw_game():
                     pygame.draw.rect(WIN, BLACK, (hp_bar_x, hp_bar_y, hp_bar_width, hp_bar_height), 1)
                 
                 # 根据主语言绘制对应单词
-                if monster[8] == 0:  # 英文怪物
+                # 检查是否是句子怪物
+                if len(monster) > 17 and monster[17]:  # 句子怪物
+                    # 显示例句
+                    word_pair = monster[2]
+                    if len(word_pair) >= 4 and word_pair[2] and word_pair[3]:
+                        # 英文例句（上方）
+                        en_sentence = word_pair[2]
+                        en_text = SMALL_FONT.render(en_sentence, True, BLACK)
+                        en_rect = en_text.get_rect(center=(int(monster[0]), int(monster[1]) - rect_height - 20))
+                        WIN.blit(en_text, en_rect)
+                        
+                        # 中文例句（下方）
+                        cn_sentence = word_pair[3]
+                        cn_text = SMALL_FONT.render(cn_sentence, True, BLACK)
+                        cn_rect = cn_text.get_rect(center=(int(monster[0]), int(monster[1]) + rect_height + 20))
+                        WIN.blit(cn_text, cn_rect)
+                elif monster[8] == 0:  # 英文怪物
                     # 绘制英文单词（在怪物上方）
                     remaining_word = ''.join(monster[3])
                     word_text = FONT.render(remaining_word, True, BLACK)
@@ -923,6 +1036,8 @@ def draw_game():
     WIN.blit(instruction_text3, (WIDTH - 450, 60))
     instruction_text4 = SMALL_FONT.render("技能: 冰冻/旋转/火焰风暴/闪电链/时间减速", True, BLACK)
     WIN.blit(instruction_text4, (WIDTH - 450, 80))
+    instruction_text5 = SMALL_FONT.render("按F11或f键切换全屏", True, BLACK)
+    WIN.blit(instruction_text5, (WIDTH - 450, 100))
     # 绘制难度设置
     difficulty_text = SMALL_FONT.render(f"难度: {current_difficulty}", True, BLACK)
     WIN.blit(difficulty_text, (20, 80))
@@ -973,6 +1088,15 @@ def reset_game():
         skill["active"] = False
     
     init_sky_elements()
+
+# 切换全屏模式
+def toggle_fullscreen():
+    global is_fullscreen
+    is_fullscreen = not is_fullscreen
+    if is_fullscreen:
+        pygame.display.set_mode((WIDTH, HEIGHT), pygame.FULLSCREEN)
+    else:
+        pygame.display.set_mode((WIDTH, HEIGHT))
 
 # 主游戏循环
 def main():
@@ -1031,6 +1155,8 @@ def main():
                         current_difficulty = "medium"
                     elif event.key == pygame.K_3:
                         current_difficulty = "hard"
+                    elif event.key == pygame.K_F11 or event.key == pygame.K_f:
+                        toggle_fullscreen()
             # 鼠标事件
             if event.type == pygame.MOUSEBUTTONDOWN:
                 if not game_over:

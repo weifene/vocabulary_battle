@@ -1,0 +1,16 @@
+游戏崩溃: Random.randint() takes 3 positional arguments but 4 were given
+
+详细错误信息:
+Traceback (most recent call last):
+  File "D:\qlib\word_monster_game\run_game.py", line 16, in <module>
+    main()
+  File "D:\qlib\word_monster_game\word_monster.py", line 1041, in main
+    move_bullets()
+  File "D:\qlib\word_monster_game\word_monster.py", line 380, in move_bullets
+    trigger_random_skill()
+  File "D:\qlib\word_monster_game\word_monster.py", line 425, in trigger_random_skill
+    activate_firestorm_skill()
+  File "D:\qlib\word_monster_game\word_monster.py", line 499, in activate_firestorm_skill
+    random.randint(255, 100, 255),  # red
+    ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+TypeError: Random.randint() takes 3 positional arguments but 4 were given

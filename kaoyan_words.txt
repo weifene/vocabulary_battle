@@ -1,17 +1,100 @@
-specialist	n. 专家
-carpet	n. 地毯
-meditation	n. 默想，冥想；沉思，深思，思考
-persist	v. 坚持；执意；继续存在[发生]；持续
-insult	v. 侮辱,凌辱 n. 侮辱,冒犯
-intact	adj. 完整无缺的,未经触动的,未受损伤的
-sufficient	adj. (for)足够的,充分的(比enough拘谨、正式)
-creative	adj. 创造性的；有创造力的
-batch	n. 一批,一组,一群
-consistent	adj. 一贯的，一致的
-mirror	n. 镜子 v. 反映,反射
-proof	n. 证据,证明；校样,样张
-domain	n. (活动,思想等)领域,范围；领地
-invaluable	adj. 非常宝贵的,无价的
-coincidence	n. 巧合；同时发生；符合，一致
-sole	adj. 单独的,唯一的 n. 脚垫,鞋底；鞋底
-rival	 adj. 竞争的， 对手的 n. 竞争者， 对手 vt. 竞争， 对抗
+misdeed	 罪行， 犯罪	...the alleged financial misdeeds of his government.	...他的政府被指控在财政方面行为不当。
+recline	 向后靠， 斜倚	She proceeded to recline on a chaise longue.	她开始斜靠在一个躺椅上。
+belligerent	 好战的， 好斗的； 交战国的； 交战的	a belligerent attitude	敌对的态度
+supplant	 排挤掉， 代替	Barker was soon supplanted as party leader.	巴克在党内的领导地位很快就被人取代了。
+abrupt	 突然的， 意外的；  唐突的， 鲁莽的	an abrupt change of plan	计划的突然改变
+oversee	 监视； 检查； 视察	Use a surveyor or architect to oversee and inspect the different stages of the work.	用一名监察员或建筑师去监督和检查工程的不同阶段。
+spontaneous	 自发的， 自然产生的	The crowd gave a spontaneous cheer.	人群自发地欢呼起来。
+pretend	 假装；  装扮； 骗…说	Let’s pretend we’re on the moon.	我们假装自己是在月球上吧。
+licit	 合法的， 正当的	She made some money by licit means.	他用正当的手段挣了一些钱。
+gloomy	 令人沮丧的， 抑郁的； 阴沉的， 阴暗的	The report paints a gloomy picture of the economy.	这篇报告描绘了一幅惨淡的经济现状。
+warrant	 保证， 担保	Therefore, it is important to note that individual situations may warrant including additional chara	因此，要注意可能保证把额外字符包括到特殊字符列表中的个别情况，这一点很重要。
+scanty	 缺乏的， 不足的	There is only scanty evidence of his involvement.	显示他牵涉其中的证据不足。
+energy	 能量	The water is heated using energy from the sun.	水是利用太阳能加热的。
+deference	 顺从， 尊重	...the older political tradition of deference to great leaders.	…敬重伟大领导人的较老的政治传统。
+solid	固体的；坚硬的	The lake was frozen solid .	湖水冻得结结实实。
+opulent	 富裕的， 丰富的	Europe’s opulent elite	欧洲富裕的精英阶层
+narrative	叙述的；有故事性的	If this story must be written, we must have the courage to eliminate all adjectives that tend to exc	如果必须要写这篇故事，我们必须要有勇气剔除易于激发我们想入非非的所有形容词：这些词会使叙述贫瘠无力，起到相反的效果。
+coincide	 一致， 符合	The interests of the US and those of the islanders may not coincide.	美国的利益和这些岛民的利益可能并不一致。
+circular	 圆形的； 环形的	a circular table	圆桌
+prankster	 顽皮的人， 爱开玩笑的人	The prankster is very important.	
+compassionate	 富于同情心的	a caring, compassionate man	有同情心并关爱他人的人
+perspicacity	 聪明； 敏锐； 洞察力	The perspicacity is very important.	
+irritable	 易怒的， 急躁的	Jo was tired, irritable, and depressed.	乔疲惫暴躁，而且情绪低落。
+triple	三部分的，三方的；三倍的，三重的	a triple murder investigation	对一宗三重谋杀案的调查
+reserved	 保留的， 留作专用的； 缄默的， 有节制的， 冷淡的	Ellen was a shy, reserved girl.	埃伦是个腼腆、寡言的姑娘。
+temper	脾气，情绪	That temper of hers will get her into trouble one of these days.	她那种脾气早晚会让她惹麻烦的。
+munificence	 宽宏大量； 慷慨	The tolerance he that old daddy take into to my bug munificence have gets the man sort.	老爸对我的错误加以宽容，他有着男人般的宽宏大量。
+legible	 清楚的， 易读的	Her handwriting was so tiny it was barely legible.	她的字写得这么小，简直都看不清楚。
+resumption	 恢复， 再开始	If the interruption cause is water flow system trouble, do not usewater right after supply resumptio	如因供水管路故障导致的停水，在供水恢复后，应打开水龙头放水2分钟左右，经确认水质合格后，方可使用。
+resurgent	 复活的	resurgent fascism	再次抬头的法西斯主义
+frantic	 狂乱的， 疯狂的	I spent three frantic days trying to get everything ready.	我花了三天时间手忙脚乱地做准备。
+grandiloquent	 夸张的， 浮夸的， 华而不实的	The grandiloquent is very important.	
+statute	 成文法； 法令， 法规； 章程， 规则； 条例	Protection for the consumer is laid down by statute (= established by law ) .	保障消费者权益已有法律明文规定。
+cardiac	 心脏的	cardiac surgery	心脏手术
+object	 物体	an everyday object such as a spoon	调羹之类的日常用品
+accessible	 易接近的， 可达到的； 易受影响的； 可理解的	The island is only accessible by boat.	这个岛只有坐船才能到。
+indigence	 贫乏； 穷困	The number of data is growing day by day, so a great deal of data is described as "data abundance, b	数据量与日俱增，大量的数据被描述为“数据丰富，但信息贫乏”。
+notable	 值得注意的； 显著的， 著名的	Every country in the world signed the treaty, with one notable exception - the United States.	全世界每个国家都签署了那份条约，只有一个国家反其道而行之，就是美国。
+concede	  承认， 承认…为真  ；  承认失败； 允许， 让予	‘That’s the only possible solution.’ ‘Yes, I suppose so,’ Charles conceded.	“那是唯一可行的解决办法。”“对，我想是。”查尔斯承认道。
+unparalleled	 无比的， 无双的， 空前的	an achievement unparalleled in sporting history	体育史上空前的成就
+midway	 中途	However, in some college, change major midway is not permitted.	但是，一些大学却不允许学生中途换专业。
+venous	 静脉的	...venous blood.	...静脉血。
+reprimand	 严责， 惩戒	He has been fined five thousand dollars and given a severe reprimand.	他被罚款5000美元，并且受到严厉的训斥。
+wreak	 发泄； 报仇	The wreak is very important.	
+evaporate	  蒸发	Most of the water had evaporated.	大部分的水都蒸发了。
+commission	委任，委托，代办，代理；犯；佣金	The dealer takes a 20% commission on the sales he makes.	经销商按销售额收取20%的佣金。
+multiplication	 乘法	There will be simple tests in addition, subtraction, multiplication, and division.	将会有加减乘除的简单测试。
+rational	 理性的； 合理的	Parents need to be fully informed so they can make a rational decision.	父母需要充分了解情况，这样才可以作出合理的决定。
+rescind	 废除； 取消	The governor does not have the authority to rescind the ruling.	该州长无权撤销这项裁决。
+provocative	 挑衅的； 惹人讨厌的	a provocative act by a terrorist group	恐怖团体的挑衅行为
+glucose	 葡萄糖	Now, if the insulin "key" cannot open up the cell to glucose, there is something interfering with it	现在，如果胰岛素这把“钥匙”无法打开细胞让葡萄糖进入，一定是有东西干扰。
+Oxygen	 氧	The human brain needs to be without oxygen for only four minutes before permanent damage occurs.	人脑缺氧只需4分钟就会造成永久性损伤。
+salt	 盐	This might need some salt and pepper.	这里面也许要加点盐和胡椒粉。
+impassioned	 热情洋溢的	She appeared on television to make an impassioned plea for help.	她在电视上恳切地请求人们帮助。
+truncated	 缩短了的； 截形的	The review body has produced a truncated version of its annual report.	这家评论机构出版了一份其年报的删节版本。
+artistic	 艺术  的， 美术  的； 有美感的； 风雅的	artistic work	艺术作品
+effrontery	 厚颜无耻	The man had the effrontery to be sarcastic.	那个男人有冷嘲热讽的放肆劲。
+decagon	 十角形， 十边形	A polygon with ten sides is a decagon.	十条边的形状叫十边形。
+ramble	 漫游； 漫谈， 闲聊	There’s plenty to discover as you ramble around this little island.	漫步这个小岛，你会有很多新发现。
+vocation	 职业， 业务	At 17 she found her true vocation as a writer.	17岁时她找到了自己真正的使命——当一名作家。
+preponderant	 占有优势的	Livestock husbandry in grassland is the preponderant industry in Inner Mongolia.	草原畜牧业是内蒙古的优势产业和基础产业。
+stature	 身高， 身材	Bernard was short in stature, with a large head.	伯纳德个子矮，头很大。
+quarantine	 检疫期	Past experience shows that quarantine measures and embargoes on the movement of people and goods are	以往的经验表明，不必要采取检疫措施并对人员和货物流动加以禁止。
+dogged	 顽固的， 顽强的	a dogged determination to succeed	不屈不挠的成功决心
+plasma	 等离子体	Now there are no gaps, so this is the state of matter, and this was the state of a plasma.	现在没有任何间隙，这样这是物质的状态，而以前是一个等离子体状态。
+brevity	  短暂；  简短	the brevity of her visit	她的短暂来访
+exorbitant	 过度的； 过高的； 昂贵的	Exorbitant housing prices have created an acute shortage of affordable housing for the poor.	过高的房价使穷人负担得起的房源严重短缺。
+reimburse	 偿还	I'll be happy to reimburse you for any expenses you've had.	我很乐意报销你的所有花费。
+violent	 猛烈的， 激烈的； 暴力引起的， 强暴的	the increase in violent crime	暴力犯罪的增多
+inaccessible	 不可接近的	In winter, the villages are inaccessible by road.	冬天时，进入这些村子的路很难走。
+confront	 使面临， 使遭遇； 面对	The problems confronting the new government were enormous.	新政府面临的难题是巨大的。
+onus	 责任； 负担	The onus is on companies and consumers to keep up with anti-virus updates.	公司和用户有责任跟上杀毒软件的更新。
+cathartic	泻药；	The drug had a cathartic effect.	这药有导泻的作用。
+counterpoint	 对音位； 对应物	It related to the harmonious of interval, harmony and counterpoint.	这种审美形态包括音程的“和谐”、和声的“和谐”、复调对位中的“和谐”。
+obese	 肥胖的， 过胖的	Obese people tend to have higher blood pressure than lean people.	肥胖的人往往比瘦人血压高。
+undulate	 波动， 起伏， 成波浪形	undulating hills	绵延起伏的山峦
+beatific	 祝福的； 快乐的， 幸福的	...a beatific smile.	...一个幸福的微笑。
+reproduce	 翻版； 繁殖； 复制； 再现	The turtles return to the coast to reproduce.	海龟回到岸上繁殖。
+skeleton	 骨骼	We agreed on a skeleton outline of the proposal.	我们给提案商定了一个基本框架。
+illiterate	 文盲的， 未受教育的	It was an illiterate letter, full of mistakes.	这封信文笔拙劣，错误连篇。
+federate	 使联合， 使结成同盟	The federate is very important.	
+myriad	 无数的； 一万的	the myriad causes of homelessness	导致人们无家可归的种种原因
+inflammable	 易燃的	Petrol is highly inflammable.	汽油高度易燃。
+pervade	 遍及	A spirit of hopelessness pervaded the country.	一种无望的情绪笼罩着该国。
+implement	 贯彻， 实现	The government promised to implement a new system to control financial loan institutions.	政府许诺要实施新的制度来控制金融贷款机构。
+erratic	 不规律的； 不稳定的	His breathing was becoming erratic.	他的呼吸越来越不均匀。
+justifiable	 有理由的； 可辩护的	justifiable anger	情有可原的愤怒
+incinerate	 把…烧成灰， 烧掉， 火化	All the infected clothing was incinerated.	所有沾染了细菌的衣服都被焚化了。
+cajolery	 甜言蜜语； 诱骗； 谄媚	The cajolery is very important.	
+adoration	 崇拜， 爱慕	the look of adoration in his eyes	他爱慕的眼神
+sagacious	 有洞察力的， 有远见的； 精明的， 敏锐的	The sagacious is very important.	
+capillary	 毛状的； 毛细血管的	This consists of a capillary connected to a mercury reservoir.	这由一根与汞池相连的毛细管所构成。
+erode	 侵蚀， 腐蚀； 使变化	The cliffs are being constantly eroded by heavy seas.	悬崖正不断受到汹涌海浪的侵蚀。
+beset	 困扰	the injuries which have beset the team all season	困扰球队整个赛季的伤病问题
+nestle	 舒适地安顿下来	Sarah lay there peacefully, the child nestling by her side.	萨拉安静地躺在那儿，孩子偎依在她身边。
+frustrate	 挫败， 阻挠， 使灰心； 阻止	Their attempts to speak to him were frustrated by the guards.	他们想跟他说话，但被警卫拦住了。
+sparse	 稀少的， 稀疏的	his sparse brown hair	他那稀疏的棕色头发
+pragmatic	 实际的； 注重实效的	Williams took a more pragmatic approach to management problems.	威廉斯在管理问题上采用的是一种更务实的做法。
+anticyclone	 反气旋， 高气压	The anticyclone weather situations are more favorable than the cyclonic ones.	反气旋天气情况比气旋天气情况更有利些。
+erosion	 腐蚀， 磨损， 侵蚀； 削弱， 减少	the problem of soil erosion	水土流失的问题
