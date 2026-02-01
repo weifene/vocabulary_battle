@@ -124,6 +124,75 @@ score = 0
 game_over = False
 last_bullet_word = ""  # 上一次发射的子弹内容
 last_shot_time = 0  # 上一次发射的时间
+last_tts_time = 0  # 上一次TTS调用的时间
+TTS_COOLDOWN = 3  # TTS冷却时间（秒）
+
+# 技能系统
+SKILL_COOLDOWN = 3  # 技能冷却时间（秒）
+skills = {
+    "freeze": {
+        "name": "冰冻",
+        "last_used": 0,
+        "active": False,
+        "duration": 3  # 冰冻持续时间（秒）
+    },
+    "spin": {
+        "name": "旋转",
+        "last_used": 0,
+        "active": False,
+        "duration": 3  # 旋转持续时间（秒）
+    },
+    "firestorm": {
+        "name": "火焰风暴",
+        "last_used": 0,
+        "active": False,
+        "duration": 2  # 火焰持续时间（秒）
+    },
+    "lightning": {
+        "name": "闪电链",
+        "last_used": 0,
+        "active": False,
+        "duration": 0.5  # 闪电持续时间（秒）
+    },
+    "slow": {
+        "name": "时间减速",
+        "last_used": 0,
+        "active": False,
+        "duration": 4  # 减速持续时间（秒）
+    }
+}
+
+# 技能效果变量
+firestorm_particles = []  # 火焰粒子
+lightning_targets = []  # 闪电目标
+slow_factor = 1.0  # 减速因子
+
+# 天空元素变量
+stars = []
+clouds = []
+star_update_counter = 0
+cloud_update_counter = 0
+STAR_UPDATE_INTERVAL = 300  # 每300帧更新一次星星
+CLOUD_UPDATE_INTERVAL = 600  # 每600帧更新一次云朵
+
+# 初始化天空元素
+def init_sky_elements():
+    global stars, clouds
+    # 初始化星星
+    stars = []
+    for _ in range(50):
+        x = random.randint(0, WIDTH)
+        y = random.randint(0, HEIGHT // 2)
+        size = random.randint(1, 3)
+        stars.append([x, y, size])
+    
+    # 初始化云朵
+    clouds = []
+    for _ in range(5):
+        x = random.randint(0, WIDTH)
+        y = random.randint(0, HEIGHT // 3)
+        cloud_size = random.randint(30, 60)
+        clouds.append([x, y, cloud_size])
 
 # 时钟
 clock = pygame.time.Clock()
@@ -150,26 +219,44 @@ def spawn_monster():
         y = random.randint(0, HEIGHT)
     # 随机决定怪物的主语言：0=英文，1=中文
     primary_language = random.randint(0, 1)
-    # [x, y, [英文, 中文], remaining_letters, is_dead, size, show_chinese, death_time, primary_language, color, opacity]
-    monsters.append([x, y, word_pair, list(word_pair[0]), False, monster_size, False, 0, primary_language, RED, 255])
+    # 根据单词长度计算血量（每个字母需要5次攻击）
+    max_hp = max(len(word_pair[0]), len(word_pair[1])) * 5
+    # [x, y, [英文, 中文], remaining_letters, is_dead, size, show_chinese, death_time, primary_language, color, opacity, frozen, frozen_end_time, spinning, spin_angle, hp, max_hp]
+    monsters.append([x, y, word_pair, list(word_pair[0]), False, monster_size, False, 0, primary_language, RED, 255, False, 0, False, 0, max_hp, max_hp])
 
 # 移动怪物
 def move_monsters():
     global game_over
+    current_time = time.time()
     for monster in monsters:
-        if not monster[4]:  # 如果怪物没有死亡
-            # 计算怪物到玩家的方向
-            dx = player_x - monster[0]
-            dy = player_y - monster[1]
-            distance = (dx**2 + dy**2)**0.5
-            if distance > 0:
-                speed = DIFFICULTY[current_difficulty]["monster_speed"]
-                monster[0] += (dx / distance) * speed
-                monster[1] += (dy / distance) * speed
-            
-            # 检查怪物是否追上玩家
-            if abs(monster[0] - player_x) < PLAYER_SIZE and abs(monster[1] - player_y) < PLAYER_SIZE:
-                game_over = True
+        try:
+            if len(monster) > 16 and not monster[4]:  # 如果怪物没有死亡
+                # 检查冰冻状态
+                if monster[11]:  # frozen
+                    if current_time > monster[12]:  # frozen_end_time
+                        monster[11] = False  # 解除冰冻
+                        monster[9] = RED  # 恢复红色
+                    else:
+                        continue  # 冰冻状态不移动
+                
+                # 检查旋转状态
+                if monster[13]:  # spinning
+                    monster[14] = (monster[14] + 15) % 360  # 旋转角度
+                
+                # 计算怪物到玩家的方向
+                dx = player_x - monster[0]
+                dy = player_y - monster[1]
+                distance = (dx**2 + dy**2)**0.5
+                if distance > 0:
+                    speed = DIFFICULTY[current_difficulty]["monster_speed"] * slow_factor
+                    monster[0] += (dx / distance) * speed
+                    monster[1] += (dy / distance) * speed
+                
+                # 检查怪物是否追上玩家
+                if abs(monster[0] - player_x) < PLAYER_SIZE and abs(monster[1] - player_y) < PLAYER_SIZE:
+                    game_over = True
+        except (IndexError, AttributeError):
+            pass  # 忽略无效的怪物数据
 
 # 获取最近的怪物
 def get_closest_monster():
@@ -178,56 +265,66 @@ def get_closest_monster():
     closest_monster = None
     min_distance = float('inf')
     for monster in monsters:
-        if not monster[4]:  # 如果怪物没有死亡
-            distance = ((monster[0] - player_x)**2 + (monster[1] - player_y)**2)**0.5
-            if distance < min_distance:
-                min_distance = distance
-                closest_monster = monster
+        try:
+            if len(monster) > 16 and not monster[4]:  # 如果怪物没有死亡
+                distance = ((monster[0] - player_x)**2 + (monster[1] - player_y)**2)**0.5
+                if distance < min_distance:
+                    min_distance = distance
+                    closest_monster = monster
+        except (IndexError, AttributeError):
+            pass
     return closest_monster
 
 # 发射子弹
 def shoot_bullet():
-    global last_shot_time, last_bullet_word
+    global last_shot_time, last_bullet_word, last_tts_time
     closest_monster = get_closest_monster()
-    if closest_monster and not closest_monster[4]:
-        # 显示怪物的次要语言
-        closest_monster[6] = True
-        # 根据怪物的主语言决定子弹使用的语言
-        if closest_monster[8] == 0:  # 英文怪物，子弹用中文
-            bullet_word = closest_monster[2][1]
-        else:  # 中文怪物，子弹用英文
-            bullet_word = closest_monster[2][0]
-        # 计算子弹方向（从玩家位置到怪物位置）
-        dx = closest_monster[0] - player_x
-        dy = closest_monster[1] - player_y
-        distance = (dx**2 + dy**2)**0.5
-        if distance > 0:
-            bullet_vel = DIFFICULTY[current_difficulty]["bullet_vel"]
-            # 检查是否连续发射相同的子弹
-            current_time = time.time()
-            is_rapid_fire = current_time - last_shot_time < 0.3  # 0.3秒内视为快速连续发射
-            
-            # 如果是快速连续发射且子弹内容相同，使用文本转语音
-            if is_rapid_fire and bullet_word == last_bullet_word and HAS_TTS:
-                try:
-                    # 使用异步模式播放语音，避免卡顿
-                    speaker.Speak(bullet_word, 1)  # 1 表示异步执行
-                except:
-                    pass  # 如果TTS失败，忽略错误
-            else:
-                # 播放子弹发射音效
-                try:
-                    sound = pygame.mixer.Sound('D:\\菜鸟图库-电浆枪射击.mp3')
-                    sound.set_volume(0.1)
-                    sound.play()
-                except:
-                    pass  # 如果没有音效文件，忽略错误
-            
-            # 更新最后发射的子弹内容和时间
-            last_bullet_word = bullet_word
-            last_shot_time = current_time
-            
-            bullets.append([player_x, player_y, (dx/distance)*bullet_vel, (dy/distance)*bullet_vel, None, closest_monster, False, bullet_word])  # [x, y, dx, dy, letter, target_monster, is_dead, bullet_word]
+    try:
+        if closest_monster and len(closest_monster) > 16 and not closest_monster[4]:
+            # 显示怪物的次要语言
+            closest_monster[6] = True
+            # 根据怪物的主语言决定子弹使用的语言
+            if closest_monster[8] == 0:  # 英文怪物，子弹用中文
+                bullet_word = closest_monster[2][1]
+            else:  # 中文怪物，子弹用英文
+                bullet_word = closest_monster[2][0]
+            # 计算子弹方向（从玩家位置到怪物位置）
+            dx = closest_monster[0] - player_x
+            dy = closest_monster[1] - player_y
+            distance = (dx**2 + dy**2)**0.5
+            if distance > 0:
+                bullet_vel = DIFFICULTY[current_difficulty]["bullet_vel"]
+                # 检查是否连续发射相同的子弹
+                current_time = time.time()
+                is_rapid_fire = current_time - last_shot_time < 0.3  # 0.3秒内视为快速连续发射
+                
+                # 检查TTS冷却时间
+                can_use_tts = current_time - last_tts_time >= TTS_COOLDOWN
+                
+                # 如果是快速连续发射且子弹内容相同，使用文本转语音
+                if is_rapid_fire and bullet_word == last_bullet_word and HAS_TTS and can_use_tts:
+                    try:
+                        # 使用异步模式播放语音，避免卡顿
+                        speaker.Speak(bullet_word, 1)  # 1 表示异步执行
+                        last_tts_time = current_time  # 更新TTS调用时间
+                    except:
+                        pass  # 如果TTS失败，忽略错误
+                else:
+                    # 播放子弹发射音效
+                    try:
+                        sound = pygame.mixer.Sound('D:\\qlib\\word_monster_game\\菜鸟图库-电浆枪射击.mp3')
+                        sound.set_volume(0.1)
+                        sound.play()
+                    except:
+                        pass  # 如果没有音效文件，忽略错误
+                
+                # 更新最后发射的子弹内容和时间
+                last_bullet_word = bullet_word
+                last_shot_time = current_time
+                
+                bullets.append([player_x, player_y, (dx/distance)*bullet_vel, (dy/distance)*bullet_vel, None, closest_monster, False, bullet_word])  # [x, y, dx, dy, letter, target_monster, is_dead, bullet_word]
+    except (IndexError, AttributeError, ZeroDivisionError):
+        pass
 
 # 移动子弹
 def move_bullets():
@@ -242,44 +339,66 @@ def move_bullets():
             
             # 检查子弹是否击中目标怪物
             target_monster = bullet[5]
-            if target_monster and not target_monster[4]:  # 如果目标怪物存在且未死亡
-                # 计算长方形怪物的碰撞区域
-                rect_width = target_monster[5] * 2
-                rect_height = target_monster[5]
-                monster_left = target_monster[0] - rect_width//2
-                monster_right = target_monster[0] + rect_width//2
-                monster_top = target_monster[1] - rect_height//2
-                monster_bottom = target_monster[1] + rect_height//2
-                
-                # 检查子弹是否在怪物的矩形范围内
-                if (monster_left < bullet[0] < monster_right) and (monster_top < bullet[1] < monster_bottom):
-                    # 标记子弹为死亡
-                    bullet[6] = True
+            try:
+                if target_monster and len(target_monster) > 16 and not target_monster[4]:  # 如果目标怪物存在且未死亡
+                    # 计算长方形怪物的碰撞区域
+                    rect_width = target_monster[5] * 2
+                    rect_height = target_monster[5]
+                    monster_left = target_monster[0] - rect_width//2
+                    monster_right = target_monster[0] + rect_width//2
+                    monster_top = target_monster[1] - rect_height//2
+                    monster_bottom = target_monster[1] + rect_height//2
                     
-                    # 改变怪物颜色并变淡
-                    target_monster[9] = (255, 165, 0)  # 变为橙色
-                    target_monster[10] = max(50, target_monster[10] - 50)  # 降低透明度
-                    
-                    # 播放字母消除音效
-                    try:
-                        sound = pygame.mixer.Sound('D:\菜鸟图库-受伤“啊”音.mp3')
-                        sound.set_volume(0.2)
-                        sound.play()
-                    except:
-                        pass  # 如果没有音效文件，忽略错误
-                    
-                    # 检查怪物是否透明度足够低（死亡条件）
-                    if target_monster[10] <= 50:
-                        target_monster[4] = True  # 标记怪物为死亡
-                        target_monster[7] = time.time()  # 记录死亡时间
-                        score += 1
-                        # 播放怪物消除音效
+                    # 检查子弹是否在怪物的矩形范围内
+                    if (monster_left < bullet[0] < monster_right) and (monster_top < bullet[1] < monster_bottom):
+                        # 标记子弹为死亡
+                        bullet[6] = True
+                        
+                        # 减少怪物血量
+                        target_monster[15] -= 1  # hp
+                        current_hp = target_monster[15]
+                        max_hp = target_monster[16]
+                        
+                        # 根据血量比例改变怪物颜色
+                        if max_hp > 0:
+                            hp_ratio = current_hp / max_hp
+                        else:
+                            hp_ratio = 0
+                        
+                        if hp_ratio > 0.7:
+                            target_monster[9] = RED
+                        elif hp_ratio > 0.4:
+                            target_monster[9] = (255, 165, 0)  # 橙色
+                        elif hp_ratio > 0.2:
+                            target_monster[9] = (255, 100, 100)  # 浅红色
+                        else:
+                            target_monster[9] = (128, 0, 0)  # 深红色
+                        
+                        # 播放字母消除音效
                         try:
-                            sound = pygame.mixer.Sound('D:\气球爆炸_爱给网_aigei_com.mp3')
-                            sound.set_volume(0.3)
+                            sound = pygame.mixer.Sound('D:\\qlib\\word_monster_game\\菜鸟图库-受伤"啊"音.mp3')
+                            sound.set_volume(0.2)
                             sound.play()
                         except:
                             pass  # 如果没有音效文件，忽略错误
+                        
+                        # 触发随机技能
+                        trigger_random_skill()
+                        
+                        # 检查怪物血量是否为0（死亡条件）
+                        if current_hp <= 0:
+                            target_monster[4] = True  # 标记怪物为死亡
+                            target_monster[7] = time.time()  # 记录死亡时间
+                            score += 1
+                            # 播放怪物消除音效
+                            try:
+                                sound = pygame.mixer.Sound('D:\\qlib\\word_monster_game\\气球爆炸_爱给网_aigei_com.mp3')
+                                sound.set_volume(0.025)
+                                sound.play()
+                            except:
+                                pass  # 如果没有音效文件，忽略错误
+            except (IndexError, AttributeError):
+                pass  # 忽略无效的怪物数据
             
             # 检查子弹是否飞出屏幕
             if bullet[0] < 0 or bullet[0] > WIDTH or bullet[1] < 0 or bullet[1] > HEIGHT:
@@ -288,118 +407,479 @@ def move_bullets():
 # 移除死亡的子弹
 def remove_dead_bullets():
     global bullets
-    bullets = [bullet for bullet in bullets if not bullet[6]]
+    try:
+        bullets[:] = [bullet for bullet in bullets if not bullet[6]]
+    except (IndexError, AttributeError):
+        pass
+
+# 触发随机技能
+def trigger_random_skill():
+    current_time = time.time()
+    skill_keys = list(skills.keys())
+    random.shuffle(skill_keys)
+    
+    for skill_key in skill_keys:
+        skill = skills[skill_key]
+        if current_time - skill["last_used"] >= SKILL_COOLDOWN:
+            if skill_key == "freeze":
+                activate_freeze_skill()
+                return True
+            elif skill_key == "spin":
+                activate_spin_skill()
+                return True
+            elif skill_key == "firestorm":
+                activate_firestorm_skill()
+                return True
+            elif skill_key == "lightning":
+                activate_lightning_skill()
+                return True
+            elif skill_key == "slow":
+                activate_slow_skill()
+                return True
+    return False
 
 # 移除死亡的怪物
 def remove_dead_monsters():
     global monsters
     current_time = time.time()
     # 只移除死亡时间超过1秒的怪物
-    monsters = [monster for monster in monsters if not monster[4] or (current_time - monster[7] < 1)]
+    try:
+        monsters[:] = [monster for monster in monsters if not monster[4] or (current_time - monster[7] < 1)]
+    except (IndexError, AttributeError):
+        pass
+
+# 激活冰冻技能
+def activate_freeze_skill():
+    current_time = time.time()
+    if current_time - skills["freeze"]["last_used"] >= SKILL_COOLDOWN:
+        skills["freeze"]["last_used"] = current_time
+        skills["freeze"]["active"] = True
+        # 对所有怪物应用冰冻效果
+        end_time = current_time + skills["freeze"]["duration"]
+        for monster in monsters:
+            try:
+                if len(monster) > 16 and not monster[4]:  # 只对活着的怪物生效
+                    monster[11] = True  # frozen
+                    monster[12] = end_time  # frozen_end_time
+                    monster[9] = (0, 191, 255)  # 变为冰蓝色
+            except (IndexError, AttributeError):
+                pass
+        return True
+    return False
+
+# 激活旋转技能
+def activate_spin_skill():
+    current_time = time.time()
+    if current_time - skills["spin"]["last_used"] >= SKILL_COOLDOWN:
+        skills["spin"]["last_used"] = current_time
+        skills["spin"]["active"] = True
+        # 对所有怪物应用旋转效果
+        end_time = current_time + skills["spin"]["duration"]
+        for monster in monsters:
+            try:
+                if len(monster) > 16 and not monster[4]:  # 只对活着的怪物生效
+                    monster[13] = True  # spinning
+                    monster[14] = 0  # spin_angle
+            except (IndexError, AttributeError):
+                pass
+        return True
+    return False
+
+# 激活火焰风暴技能
+def activate_firestorm_skill():
+    global firestorm_particles
+    current_time = time.time()
+    if current_time - skills["firestorm"]["last_used"] >= SKILL_COOLDOWN:
+        skills["firestorm"]["last_used"] = current_time
+        skills["firestorm"]["active"] = True
+        
+        # 生成火焰粒子
+        firestorm_particles = []
+        for _ in range(50):
+            firestorm_particles.append([
+                random.randint(0, WIDTH),
+                random.randint(0, HEIGHT),
+                random.randint(-3, 3),  # dx
+                random.randint(-3, 3),  # dy
+                random.randint(20, 40),  # size
+                random.randint(100, 255),  # red
+                random.randint(50, 150),  # green
+                0,  # blue
+                random.randint(150, 255)  # alpha
+            ])
+        
+        # 对所有怪物造成伤害
+        for monster in monsters:
+            try:
+                if len(monster) > 16 and not monster[4]:
+                    monster[15] = max(0, monster[15] - 5)  # 减少5点血量
+                    if monster[15] <= 0:
+                        monster[4] = True
+                        monster[7] = current_time
+                        global score
+                        score += 1
+            except (IndexError, AttributeError):
+                pass
+        
+        return True
+    return False
+
+# 激活闪电链技能
+def activate_lightning_skill():
+    global lightning_targets
+    current_time = time.time()
+    if current_time - skills["lightning"]["last_used"] >= SKILL_COOLDOWN:
+        skills["lightning"]["last_used"] = current_time
+        skills["lightning"]["active"] = True
+        
+        # 选择最近的3个怪物作为闪电目标
+        alive_monsters = []
+        for m in monsters:
+            try:
+                if len(m) > 16 and not m[4]:
+                    alive_monsters.append(m)
+            except (IndexError, AttributeError):
+                pass
+        
+        if alive_monsters:
+            # 按距离排序
+            alive_monsters.sort(key=lambda m: (m[0] - player_x)**2 + (m[1] - player_y)**2)
+            # 选择最近的3个
+            lightning_targets = alive_monsters[:3]
+            
+            # 对目标造成大量伤害
+            for monster in lightning_targets:
+                try:
+                    if len(monster) > 16:
+                        monster[15] = max(0, monster[15] - 8)  # 减少8点血量
+                        if monster[15] <= 0:
+                            monster[4] = True
+                            monster[7] = current_time
+                            global score
+                            score += 1
+                except (IndexError, AttributeError):
+                    pass
+        
+        return True
+    return False
+
+# 激活时间减速技能
+def activate_slow_skill():
+    global slow_factor
+    current_time = time.time()
+    if current_time - skills["slow"]["last_used"] >= SKILL_COOLDOWN:
+        skills["slow"]["last_used"] = current_time
+        skills["slow"]["active"] = True
+        slow_factor = 0.3  # 减速到30%
+        return True
+    return False
+
+# 检查技能状态
+def check_skills():
+    global firestorm_particles, lightning_targets, slow_factor
+    current_time = time.time()
+    
+    # 检查冰冻技能
+    if skills["freeze"]["active"]:
+        # 检查是否有怪物还在冰冻状态
+        any_frozen = False
+        for monster in monsters:
+            try:
+                if len(monster) > 16 and not monster[4] and monster[11]:
+                    any_frozen = True
+                    break
+            except (IndexError, AttributeError):
+                pass
+        if not any_frozen:
+            skills["freeze"]["active"] = False
+    
+    # 检查旋转技能
+    if skills["spin"]["active"]:
+        # 检查是否有怪物还在旋转状态
+        any_spinning = False
+        for monster in monsters:
+            try:
+                if len(monster) > 16 and not monster[4] and monster[13]:
+                    any_spinning = True
+                    break
+            except (IndexError, AttributeError):
+                pass
+        if not any_spinning:
+            skills["spin"]["active"] = False
+    
+    # 检查火焰风暴技能
+    if skills["firestorm"]["active"]:
+        if current_time - skills["firestorm"]["last_used"] >= skills["firestorm"]["duration"]:
+            skills["firestorm"]["active"] = False
+            firestorm_particles = []
+    
+    # 检查闪电技能
+    if skills["lightning"]["active"]:
+        if current_time - skills["lightning"]["last_used"] >= skills["lightning"]["duration"]:
+            skills["lightning"]["active"] = False
+            lightning_targets = []
+    
+    # 检查减速技能
+    if skills["slow"]["active"]:
+        if current_time - skills["slow"]["last_used"] >= skills["slow"]["duration"]:
+            skills["slow"]["active"] = False
+            slow_factor = 1.0
 
 
 
 # 绘制游戏元素
 def draw_game():
-    WIN.fill(WHITE)
+    # 绘制渐变背景
+    for y in range(HEIGHT):
+        r = 240 + (y * 15) // HEIGHT
+        g = 240 + (y * 15) // HEIGHT
+        b = 255
+        pygame.draw.line(WIN, (r, g, b), (0, y), (WIDTH, y))
+    
+    # 绘制星星
+    for star in stars:
+        x, y, size = star
+        pygame.draw.circle(WIN, (255, 255, 220), (x, y), size)
+    
+    # 绘制云朵
+    for cloud in clouds:
+        x, y, cloud_size = cloud
+        # 绘制云朵
+        pygame.draw.circle(WIN, (255, 255, 255), (x, y), cloud_size // 2)
+        pygame.draw.circle(WIN, (255, 255, 255), (x + cloud_size // 3, y), cloud_size // 2)
+        pygame.draw.circle(WIN, (255, 255, 255), (x - cloud_size // 3, y), cloud_size // 2)
+        pygame.draw.circle(WIN, (255, 255, 255), (x, y - cloud_size // 3), cloud_size // 2)
+    
+    # 绘制火焰粒子
+    if skills["firestorm"]["active"]:
+        for particle in firestorm_particles:
+            try:
+                x, y, dx, dy, size, r, g, b, a = particle
+                # 创建带透明度的表面
+                particle_surf = pygame.Surface((size * 2, size * 2), pygame.SRCALPHA)
+                pygame.draw.circle(particle_surf, (r, g, b, a), (size, size), size)
+                WIN.blit(particle_surf, (int(x) - size, int(y) - size))
+                
+                # 更新粒子位置
+                particle[0] += dx
+                particle[1] += dy
+                particle[7] = max(0, particle[7] - 5)  # 减少透明度
+                particle[4] = max(5, particle[4] - 0.5)  # 减小尺寸
+            except (IndexError, AttributeError):
+                pass
+    
+    # 绘制闪电效果
+    if skills["lightning"]["active"] and lightning_targets:
+        for monster in lightning_targets:
+            try:
+                if monster and len(monster) > 16 and not monster[4]:
+                    # 从玩家到怪物绘制闪电
+                    start_pos = (int(player_x), int(player_y))
+                    end_pos = (int(monster[0]), int(monster[1]))
+                    
+                    # 绘制多条闪电线
+                    for j in range(3):
+                        offset_x = random.randint(-10, 10)
+                        offset_y = random.randint(-10, 10)
+                        mid_pos = ((start_pos[0] + end_pos[0]) // 2 + offset_x, 
+                                  (start_pos[1] + end_pos[1]) // 2 + offset_y)
+                        pygame.draw.line(WIN, (255, 255, 0), start_pos, mid_pos, 3)
+                        pygame.draw.line(WIN, (255, 255, 0), mid_pos, end_pos, 3)
+                    
+                    # 绘制发光效果
+                    pygame.draw.circle(WIN, (255, 255, 200), end_pos, 20, 2)
+            except (IndexError, AttributeError):
+                pass  # 忽略已死亡的怪物
     
     # 绘制玩家
-    pygame.draw.rect(WIN, BLUE, (player_x - PLAYER_SIZE//2, player_y - PLAYER_SIZE//2, PLAYER_SIZE, PLAYER_SIZE))
+    # 玩家身体（圆形）
+    pygame.draw.circle(WIN, BLUE, (int(player_x), int(player_y)), PLAYER_SIZE//2)
+    
+    # 玩家眼睛
+    eye_size = PLAYER_SIZE // 6
+    eye_offset = PLAYER_SIZE // 4
+    # 白色眼白
+    pygame.draw.circle(WIN, WHITE, (int(player_x) - eye_offset, int(player_y) - PLAYER_SIZE//6), eye_size)
+    pygame.draw.circle(WIN, WHITE, (int(player_x) + eye_offset, int(player_y) - PLAYER_SIZE//6), eye_size)
+    # 黑色瞳孔
+    pupil_size = eye_size // 2
+    pygame.draw.circle(WIN, BLACK, (int(player_x) - eye_offset, int(player_y) - PLAYER_SIZE//6), pupil_size)
+    pygame.draw.circle(WIN, BLACK, (int(player_x) + eye_offset, int(player_y) - PLAYER_SIZE//6), pupil_size)
+    
+    # 玩家嘴巴（微笑）
+    mouth_width = PLAYER_SIZE // 2
+    mouth_height = PLAYER_SIZE // 6
+    pygame.draw.arc(WIN, BLACK, (
+        int(player_x) - mouth_width//2, 
+        int(player_y) + PLAYER_SIZE//6, 
+        mouth_width, 
+        mouth_height
+    ), 0, 3.14, 2)
+    
+    # 玩家
+    limb_size = PLAYER_SIZE // 5
+    # 左
+    pygame.draw.line(WIN, BLUE, (int(player_x) - PLAYER_SIZE//2, int(player_y)), 
+                   (int(player_x) - PLAYER_SIZE//2 - limb_size*2, int(player_y) - limb_size), limb_size)
+    # 右
+    pygame.draw.line(WIN, BLUE, (int(player_x) + PLAYER_SIZE//2, int(player_y)), 
+                   (int(player_x) + PLAYER_SIZE//2 + limb_size*2, int(player_y) - limb_size), limb_size)
+    # 左
+    pygame.draw.line(WIN, BLUE, (int(player_x) - PLAYER_SIZE//4, int(player_y) + PLAYER_SIZE//2), 
+                   (int(player_x) - PLAYER_SIZE//4 - limb_size, int(player_y) + PLAYER_SIZE//2 + limb_size*2), limb_size)
+    # 右
+    pygame.draw.line(WIN, BLUE, (int(player_x) + PLAYER_SIZE//4, int(player_y) + PLAYER_SIZE//2), 
+                   (int(player_x) + PLAYER_SIZE//4 + limb_size, int(player_y) + PLAYER_SIZE//2 + limb_size*2), limb_size)
     
     # 绘制怪物
     for monster in monsters:
-        if not monster[4]:
-            # 计算长方形怪物的尺寸
-            rect_width = monster[5] * 2
-            rect_height = monster[5]
-            
-            # 获取怪物颜色和透明度
-            color = monster[9]
-            opacity = monster[10]
-            
-            # 创建半透明表面
-            surf = pygame.Surface((rect_width, rect_height), pygame.SRCALPHA)
-            # 绘制怪物身体（长方形）
-            pygame.draw.rect(surf, (*color, opacity), (0, 0, rect_width, rect_height))
-            # 绘制到窗口
-            WIN.blit(surf, (int(monster[0]) - rect_width//2, int(monster[1]) - rect_height//2))
-            
-            # 眼睛
-            eye_size = monster[5] // 5
-            pygame.draw.circle(WIN, WHITE, (int(monster[0]) - rect_width//4, int(monster[1]) - rect_height//4), eye_size)
-            pygame.draw.circle(WIN, WHITE, (int(monster[0]) + rect_width//4, int(monster[1]) - rect_height//4), eye_size)
-            pygame.draw.circle(WIN, BLACK, (int(monster[0]) - rect_width//4, int(monster[1]) - rect_height//4), eye_size // 2)
-            pygame.draw.circle(WIN, BLACK, (int(monster[0]) + rect_width//4, int(monster[1]) - rect_height//4), eye_size // 2)
-            # 嘴巴
-            pygame.draw.arc(WIN, BLACK, (
-                int(monster[0]) - rect_width//3, 
-                int(monster[1]) + rect_height//6, 
-                rect_width//1.5, 
-                rect_height//2
-            ), 0, 3.14, 2)
-            # 角
-            pygame.draw.polygon(WIN, (255, 165, 0), [
-                (int(monster[0]), int(monster[1]) - rect_height//2),
-                (int(monster[0]) - rect_width//4, int(monster[1])),
-                (int(monster[0]) + rect_width//4, int(monster[1]))
-            ])
-            # 四肢
-            limb_size = monster[5] // 3
-            # 左上肢
-            pygame.draw.line(WIN, color, (int(monster[0]) - rect_width//2, int(monster[1]) - rect_height//4), 
-                           (int(monster[0]) - rect_width//2 - limb_size, int(monster[1]) - rect_height//4 - limb_size), limb_size)
-            # 右上肢
-            pygame.draw.line(WIN, color, (int(monster[0]) + rect_width//2, int(monster[1]) - rect_height//4), 
-                           (int(monster[0]) + rect_width//2 + limb_size, int(monster[1]) - rect_height//4 - limb_size), limb_size)
-            # 左下肢
-            pygame.draw.line(WIN, color, (int(monster[0]) - rect_width//4, int(monster[1]) + rect_height//2), 
-                           (int(monster[0]) - rect_width//4 - limb_size, int(monster[1]) + rect_height//2 + limb_size), limb_size)
-            # 右下肢
-            pygame.draw.line(WIN, color, (int(monster[0]) + rect_width//4, int(monster[1]) + rect_height//2), 
-                           (int(monster[0]) + rect_width//4 + limb_size, int(monster[1]) + rect_height//2 + limb_size), limb_size)
-            
-            # 根据主语言绘制对应单词
-            if monster[8] == 0:  # 英文怪物
-                # 绘制英文单词（在怪物上方）
-                remaining_word = ''.join(monster[3])
-                word_text = FONT.render(remaining_word, True, BLACK)
-                text_rect = word_text.get_rect(center=(int(monster[0]), int(monster[1]) - rect_height))
-                WIN.blit(word_text, text_rect)
-                # 绘制中文单词（在怪物下方）- 只在show_chinese为True时显示
-                if monster[6]:
-                    chinese_text = SMALL_FONT.render(monster[2][1], True, BLACK)
-                    chinese_rect = chinese_text.get_rect(center=(int(monster[0]), int(monster[1]) + rect_height))
+        try:
+            if not monster[4]:
+                # 计算长方形怪物的尺寸
+                rect_width = monster[5] * 2
+                rect_height = monster[5]
+                
+                # 获取怪物颜色和透明度
+                color = monster[9]
+                opacity = monster[10]
+                
+                # 创建更大的表面以容纳旋转后的怪物
+                max_dim = max(rect_width, rect_height) * 2
+                monster_surf = pygame.Surface((max_dim, max_dim), pygame.SRCALPHA)
+                center_x, center_y = max_dim // 2, max_dim // 2
+                
+                # 绘制怪物身体（长方形）
+                pygame.draw.rect(monster_surf, (*color, opacity), 
+                               (center_x - rect_width//2, center_y - rect_height//2, rect_width, rect_height))
+                
+                # 眼睛
+                eye_size = monster[5] // 5
+                pygame.draw.circle(monster_surf, WHITE, (center_x - rect_width//4, center_y - rect_height//4), eye_size)
+                pygame.draw.circle(monster_surf, WHITE, (center_x + rect_width//4, center_y - rect_height//4), eye_size)
+                pygame.draw.circle(monster_surf, BLACK, (center_x - rect_width//4, center_y - rect_height//4), eye_size // 2)
+                pygame.draw.circle(monster_surf, BLACK, (center_x + rect_width//4, center_y - rect_height//4), eye_size // 2)
+                
+                # 嘴巴
+                pygame.draw.arc(monster_surf, BLACK, (
+                    center_x - rect_width//3, 
+                    center_y + rect_height//6, 
+                    rect_width//1.5, 
+                    rect_height//2
+                ), 0, 3.14, 2)
+                
+                # 角
+                pygame.draw.polygon(monster_surf, (255, 165, 0), [
+                    (center_x, center_y - rect_height//2),
+                    (center_x - rect_width//4, center_y),
+                    (center_x + rect_width//4, center_y)
+                ])
+                
+                # 四肢
+                limb_size = monster[5] // 3
+                # 左上肢
+                pygame.draw.line(monster_surf, color, (center_x - rect_width//2, center_y - rect_height//4), 
+                               (center_x - rect_width//2 - limb_size, center_y - rect_height//4 - limb_size), limb_size)
+                # 右上肢
+                pygame.draw.line(monster_surf, color, (center_x + rect_width//2, center_y - rect_height//4), 
+                               (center_x + rect_width//2 + limb_size, center_y - rect_height//4 - limb_size), limb_size)
+                # 左下肢
+                pygame.draw.line(monster_surf, color, (center_x - rect_width//4, center_y + rect_height//2), 
+                               (center_x - rect_width//4 - limb_size, center_y + rect_height//2 + limb_size), limb_size)
+                # 右下肢
+                pygame.draw.line(monster_surf, color, (center_x + rect_width//4, center_y + rect_height//2), 
+                               (center_x + rect_width//4 + limb_size, center_y + rect_height//2 + limb_size), limb_size)
+                
+                # 如果怪物在旋转状态，旋转表面
+                if monster[13]:  # spinning
+                    monster_surf = pygame.transform.rotate(monster_surf, monster[14])
+                
+                # 绘制到窗口
+                rect = monster_surf.get_rect(center=(int(monster[0]), int(monster[1])))
+                WIN.blit(monster_surf, rect)
+                
+                # 绘制血条
+                if len(monster) > 16:
+                    current_hp = monster[15]
+                    max_hp = monster[16]
+                    hp_bar_width = rect_width
+                    hp_bar_height = 6
+                    hp_bar_x = int(monster[0]) - hp_bar_width // 2
+                    hp_bar_y = int(monster[1]) - rect_height - 20
+                    
+                    # 血条背景（灰色）
+                    pygame.draw.rect(WIN, (128, 128, 128), (hp_bar_x, hp_bar_y, hp_bar_width, hp_bar_height))
+                    
+                    # 血条前景（根据血量比例变色）
+                    if max_hp > 0:
+                        hp_ratio = current_hp / max_hp
+                    else:
+                        hp_ratio = 0
+                    
+                    if hp_ratio > 0.7:
+                        hp_color = GREEN
+                    elif hp_ratio > 0.4:
+                        hp_color = (255, 255, 0)  # 黄色
+                    elif hp_ratio > 0.2:
+                        hp_color = (255, 165, 0)  # 橙色
+                    else:
+                        hp_color = RED
+                    
+                    # 绘制当前血量
+                    pygame.draw.rect(WIN, hp_color, (hp_bar_x, hp_bar_y, int(hp_bar_width * hp_ratio), hp_bar_height))
+                    
+                    # 血条边框
+                    pygame.draw.rect(WIN, BLACK, (hp_bar_x, hp_bar_y, hp_bar_width, hp_bar_height), 1)
+                
+                # 根据主语言绘制对应单词
+                if monster[8] == 0:  # 英文怪物
+                    # 绘制英文单词（在怪物上方）
+                    remaining_word = ''.join(monster[3])
+                    word_text = FONT.render(remaining_word, True, BLACK)
+                    text_rect = word_text.get_rect(center=(int(monster[0]), int(monster[1]) - rect_height))
+                    WIN.blit(word_text, text_rect)
+                    # 绘制中文单词（在怪物下方）- 只在show_chinese为True时显示
+                    if monster[6]:
+                        chinese_text = SMALL_FONT.render(monster[2][1], True, BLACK)
+                        chinese_rect = chinese_text.get_rect(center=(int(monster[0]), int(monster[1]) + rect_height))
+                        WIN.blit(chinese_text, chinese_rect)
+                else:  # 中文怪物
+                    # 绘制中文单词（在怪物上方）
+                    chinese_word = monster[2][1]
+                    chinese_text = FONT.render(chinese_word, True, BLACK)
+                    chinese_rect = chinese_text.get_rect(center=(int(monster[0]), int(monster[1]) - rect_height))
                     WIN.blit(chinese_text, chinese_rect)
-            else:  # 中文怪物
-                # 绘制中文单词（在怪物上方）
-                chinese_word = monster[2][1]
-                chinese_text = FONT.render(chinese_word, True, BLACK)
-                chinese_rect = chinese_text.get_rect(center=(int(monster[0]), int(monster[1]) - rect_height))
-                WIN.blit(chinese_text, chinese_rect)
-                # 绘制英文单词（在怪物下方）- 只在show_chinese为True时显示
-                if monster[6]:
-                    english_text = SMALL_FONT.render(monster[2][0], True, BLACK)
-                    english_rect = english_text.get_rect(center=(int(monster[0]), int(monster[1]) + rect_height))
-                    WIN.blit(english_text, english_rect)
+                    # 绘制英文单词（在怪物下方）- 只在show_chinese为True时显示
+                    if monster[6]:
+                        english_text = SMALL_FONT.render(monster[2][0], True, BLACK)
+                        english_rect = english_text.get_rect(center=(int(monster[0]), int(monster[1]) + rect_height))
+                        WIN.blit(english_text, english_rect)
+        except (IndexError, AttributeError):
+            pass  # 忽略无效的怪物数据
     # 绘制死亡的怪物 - 只显示中文
     for monster in monsters:
-        if monster[4]:
-            chinese_text = FONT.render(monster[2][1], True, BLACK)
-            chinese_rect = chinese_text.get_rect(center=(int(monster[0]), int(monster[1])))
-            WIN.blit(chinese_text, chinese_rect)
+        try:
+            if len(monster) > 4 and monster[4]:
+                chinese_text = FONT.render(monster[2][1], True, BLACK)
+                chinese_rect = chinese_text.get_rect(center=(int(monster[0]), int(monster[1])))
+                WIN.blit(chinese_text, chinese_rect)
+        except (IndexError, AttributeError):
+            pass
     
     # 绘制子弹
     for bullet in bullets:
-        if not bullet[6]:
-            # 绘制子弹（增强可见性）
-            # 外发光效果
-            pygame.draw.circle(WIN, YELLOW, (int(bullet[0]), int(bullet[1])), 8)
-            # 主子弹
-            pygame.draw.circle(WIN, (255, 165, 0), (int(bullet[0]), int(bullet[1])), 5)
-            # 绘制子弹上的完整单词（更大更明显）
-            bullet_text = FONT.render(bullet[7], True, BLACK)
-            bullet_rect = bullet_text.get_rect(center=(int(bullet[0]), int(bullet[1]) - 15))
-            WIN.blit(bullet_text, bullet_rect)
+        try:
+            if len(bullet) > 7 and not bullet[6]:
+                # 绘制子弹（增强可见性）
+                # 外发光效果
+                pygame.draw.circle(WIN, YELLOW, (int(bullet[0]), int(bullet[1])), 8)
+                # 主子弹
+                pygame.draw.circle(WIN, (255, 165, 0), (int(bullet[0]), int(bullet[1])), 5)
+                # 绘制子弹上的完整单词（更大更明显）
+                bullet_text = FONT.render(bullet[7], True, BLACK)
+                bullet_rect = bullet_text.get_rect(center=(int(bullet[0]), int(bullet[1]) - 15))
+                WIN.blit(bullet_text, bullet_rect)
+        except (IndexError, AttributeError):
+            pass
     
     # 绘制分数
     # 计算存活时间
@@ -437,8 +917,12 @@ def draw_game():
     # 绘制游戏说明
     instruction_text1 = SMALL_FONT.render("左键移动玩家，右键发射最近怪物的第一个字母", True, BLACK)
     WIN.blit(instruction_text1, (WIDTH - 450, 20))
-    instruction_text2 = SMALL_FONT.render("击中后抵消字母，全部抵消后怪物消灭", True, BLACK)
+    instruction_text2 = SMALL_FONT.render("击中后减少怪物血量，血量为0时怪物消灭", True, BLACK)
     WIN.blit(instruction_text2, (WIDTH - 450, 40))
+    instruction_text3 = SMALL_FONT.render("子弹击中怪物时随机触发技能", True, BLACK)
+    WIN.blit(instruction_text3, (WIDTH - 450, 60))
+    instruction_text4 = SMALL_FONT.render("技能: 冰冻/旋转/火焰风暴/闪电链/时间减速", True, BLACK)
+    WIN.blit(instruction_text4, (WIDTH - 450, 80))
     # 绘制难度设置
     difficulty_text = SMALL_FONT.render(f"难度: {current_difficulty}", True, BLACK)
     WIN.blit(difficulty_text, (20, 80))
@@ -446,11 +930,30 @@ def draw_game():
     difficulty_switch_text = SMALL_FONT.render("按1(简单), 2(中等), 3(困难)切换难度", True, BLACK)
     WIN.blit(difficulty_switch_text, (20, 110))
     
+    # 绘制技能状态
+    current_time = time.time()
+    skill_y = 140
+    for skill_key, skill in skills.items():
+        # 计算冷却时间
+        cooldown_remaining = max(0, SKILL_COOLDOWN - (current_time - skill["last_used"]))
+        if cooldown_remaining > 0:
+            status_text = f"{skill['name']}: 冷却中 {cooldown_remaining:.1f}s"
+            color = (128, 128, 128)  # 灰色
+        elif skill["active"]:
+            status_text = f"{skill['name']}: 激活中"
+            color = GREEN
+        else:
+            status_text = f"{skill['name']}: 就绪"
+            color = BLUE
+        skill_text = SMALL_FONT.render(status_text, True, color)
+        WIN.blit(skill_text, (20, skill_y))
+        skill_y += 25  # 减小间距以容纳更多技能
+    
     pygame.display.update()
 
 # 重置游戏
 def reset_game():
-    global player_x, player_y, monsters, bullets, score, game_over, frame_count, start_time
+    global player_x, player_y, monsters, bullets, score, game_over, frame_count, start_time, firestorm_particles, lightning_targets, slow_factor, last_tts_time
     player_x = WIDTH // 2
     player_y = HEIGHT // 2
     monsters = []
@@ -459,16 +962,54 @@ def reset_game():
     game_over = False
     frame_count = 0  # 重置帧计数器
     start_time = time.time()  # 重置游戏开始时间
+    firestorm_particles = []
+    lightning_targets = []
+    slow_factor = 1.0
+    last_tts_time = 0  # 重置TTS时间
+    
+    # 重置技能状态
+    for skill in skills.values():
+        skill["last_used"] = 0
+        skill["active"] = False
+    
+    init_sky_elements()
 
 # 主游戏循环
 def main():
-    global player_x, player_y, monsters, score, game_over, current_difficulty, frame_count, start_time
+    global player_x, player_y, monsters, score, game_over, current_difficulty, frame_count, start_time, star_update_counter, cloud_update_counter, firestorm_particles, lightning_targets, slow_factor, last_tts_time
     frame_count = 0
     start_time = time.time()  # 记录游戏开始时间
+    firestorm_particles = []
+    lightning_targets = []
+    slow_factor = 1.0
+    last_tts_time = 0
+    init_sky_elements()
     
     while True:
         clock.tick(FPS)
         frame_count += 1
+        
+        # 缓慢更新天空元素
+        star_update_counter += 1
+        cloud_update_counter += 1
+        
+        # 每间隔一段时间更新星星
+        if star_update_counter >= STAR_UPDATE_INTERVAL:
+            star_update_counter = 0
+            # 随机更新一些星星的位置
+            for i in range(5):  # 每次只更新5颗星星
+                if stars:
+                    index = random.randint(0, len(stars) - 1)
+                    stars[index] = [random.randint(0, WIDTH), random.randint(0, HEIGHT // 2), random.randint(1, 3)]
+        
+        # 每间隔一段时间更新云朵
+        if cloud_update_counter >= CLOUD_UPDATE_INTERVAL:
+            cloud_update_counter = 0
+            # 随机更新一些云朵的位置
+            for i in range(2):  # 每次只更新2朵云
+                if clouds:
+                    index = random.randint(0, len(clouds) - 1)
+                    clouds[index] = [random.randint(0, WIDTH), random.randint(0, HEIGHT // 3), random.randint(30, 60)]
         
         # 生成怪物
         if len(monsters) < 3 and frame_count % DIFFICULTY[current_difficulty]["spawn_rate"] == 0 and not game_over:
@@ -507,6 +1048,9 @@ def main():
         # 移动子弹
         move_bullets()
         
+        # 检查技能状态
+        check_skills()
+        
         # 移除死亡的怪物
         remove_dead_monsters()
         
@@ -517,4 +1061,10 @@ def main():
         draw_game()
 
 if __name__ == "__main__":
-    main()
+    try:
+        main()
+    except KeyboardInterrupt:
+        print("游戏被用户中断")
+    finally:
+        pygame.quit()
+        sys.exit()
